@@ -1257,27 +1257,28 @@ struct FSinOsc : public ZeroInputUGen<FSinOsc>
 
 
 
-struct SinOscPMFB : public TwoInputUGen<SinOscPMFB>
+struct SinOscPMFB : public ThreeInputUGen<SinOscPMFB>
 {
 	Z phase;
 	Z freqmul;
 	Z y1;
 	
-	SinOscPMFB(Thread& th, Arg freq, Z iphase, Arg phasefb) : TwoInputUGen<SinOscPMFB>(th, freq, phasefb), phase(sc_wrap(iphase, 0., 1.) * kTwoPi), freqmul(th.rate.radiansPerSample)
+	SinOscPMFB(Thread& th, Arg freq, Arg modphase, Arg phasefb) : ThreeInputUGen<SinOscPMFB>(th, freq, modphase, phasefb), freqmul(th.rate.radiansPerSample)
 	{
 		freqmul = th.rate.radiansPerSample;
 	}
 	
 	virtual const char* TypeName() const override { return "SinOscPMFB"; }
 		
-	void calc(int n, Z* out, Z* freq, Z* phasefb, int freqStride, int phasefbStride) 
+	void calc(int n, Z* out, Z* freq, Z* modPhase, Z* phasefb, int freqStride, int modPhaseStride, int phasefbStride)
 	{
 		for (int i = 0; i < n; ++i) {
-			Z y0 = sin(phase + *phasefb * y1);
+			Z y0 = sin(phase + *phasefb * y1 + *modPhase);
 			out[i] = y0;
 			y1 = y0;
 			phase += *freq * freqmul;
 			freq += freqStride;
+			modPhase += modPhaseStride;
 			phasefb += phasefbStride;
 			if (phase >= kTwoPi) phase -= kTwoPi;
 			else if (phase < 0.) phase += kTwoPi;
@@ -1405,10 +1406,10 @@ static void sinoscm_(Thread& th, Prim* prim)
 static void sinoscfb_(Thread& th, Prim* prim)
 {
 	V fb = th.popZIn("sinoscfb : fb");
-	Z iphase = th.popFloat("sinoscfb : phase");
+	V phase = th.popZIn("sinoscfb : phase");
 	V freq = th.popZIn("sinoscfb : freq");
 
-	th.push(new List(new SinOscPMFB(th, freq, iphase, fb)));
+	th.push(new List(new SinOscPMFB(th, freq, phase, fb)));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
