@@ -242,7 +242,7 @@ void Thread::getLine()
 	line = el_gets(el, &linelen);
 	linepos = 0;
 	if (!line || strncmp(line, "quit", 4)==0 || strncmp(line, "..", 2)==0) { line = NULL; throw errUserQuit; }
-	if (line && linelen) {
+	if (linelen > 0) {
 		history(myhistory, &ev, H_ENTER, line);
 		history(myhistory, &ev, H_SAVE, historyfilename);
 		if (logfilename) {
