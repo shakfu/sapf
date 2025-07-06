@@ -46,7 +46,7 @@ add_subdirectory(libmanta)
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 
-set(SOURCES
+set(CPP_SOURCES
 	${SOURCE_DIR}/CoreOps.cpp
 	${SOURCE_DIR}/DelayUGens.cpp
 	${SOURCE_DIR}/dsp.cpp
@@ -54,7 +54,6 @@ set(SOURCES
 	${SOURCE_DIR}/ErrorCodes.cpp
 	${SOURCE_DIR}/FilterUGens.cpp
 	${SOURCE_DIR}/main.cpp
-	${SOURCE_DIR}/makeImage.mm
 	${SOURCE_DIR}/MathFuns.cpp
 	${SOURCE_DIR}/MathOps.cpp
 	${SOURCE_DIR}/Midi.cpp
@@ -77,9 +76,14 @@ set(SOURCES
 	${SOURCE_DIR}/VM.cpp
 )
 
+set(OBJC_SOURCES
+	${SOURCE_DIR}/makeImage.mm
+)
+
 add_executable(
 	sapf
-	${SOURCES}
+	${CPP_SOURCES}
+	${OBJC_SOURCES}
 )
 
 target_include_directories(
