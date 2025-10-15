@@ -95,7 +95,7 @@ extern void AddSetOps();
 extern void AddRandomOps();
 extern void AddMidiOps();
 
-const char* gVersionString = "0.1.21";
+const char* gVersionString = "0.1.22";
 
 static void usage()
 {
