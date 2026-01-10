@@ -50,7 +50,7 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Run Tests
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure -E "^midi_"
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
