@@ -30,7 +30,7 @@
 
 #include <pthread.h>
 #include "RCObj.hpp"
-#include <os/lock.h>
+#include "PlatformLock.hpp"
 
 void post(const char* fmt, ...);
 
@@ -519,7 +519,7 @@ class Ref : public Object
 {
 	Z z;
 	O o;
-    mutable os_unfair_lock mSpinLock = OS_UNFAIR_LOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
 public:
 
 	Ref(V inV) : z(inV.f), o(inV.o()) { if (o) o->retain(); }
@@ -1039,7 +1039,7 @@ public:
 class Plug : public Object
 {
 	VIn in;
-    mutable os_unfair_lock mSpinLock = OS_UNFAIR_LOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
 	int mChangeCount;
 public:
 	
@@ -1063,7 +1063,7 @@ public:
 class ZPlug : public Object
 {
 	ZIn in;
-    mutable os_unfair_lock mSpinLock = OS_UNFAIR_LOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
 	int mChangeCount;
 public:
 	
@@ -1175,7 +1175,7 @@ class List : public Object
 {
 	P<List> mNext;
 public:
-    mutable os_unfair_lock mSpinLock = OS_UNFAIR_LOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
 	P<Gen> mGen;
 	P<Array> mArray;
 
@@ -1466,19 +1466,7 @@ inline Z Array::foldAtz(int64_t i)
 const int kMaxArgs = 16;
 
 
-class SpinLocker
-{
-    os_unfair_lock& lock;   
-public:
-	SpinLocker(os_unfair_lock& inLock) : lock(inLock) 
-	{
-        os_unfair_lock_lock(&lock);
-	}
-	~SpinLocker()
-	{
-		os_unfair_lock_unlock(&lock);
-	}
-};
+// SpinLocker is defined in PlatformLock.hpp
 
 struct ArgInfo
 {
@@ -1497,6 +1485,7 @@ P<Form> linearizeInheritance(Thread& th, size_t numArgs, V* args);
 
 ///////////
 
+#if defined(__APPLE__)
 #include <CoreFoundation/CFBase.h>
 
 class CFReleaser
@@ -1507,6 +1496,7 @@ public:
 	~CFReleaser() { release(); }
 	void release() { if (p) { CFRelease(p); p = nullptr; }}
 };
+#endif
 
 class Freer
 {

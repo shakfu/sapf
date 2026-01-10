@@ -23,6 +23,7 @@
 #include <vector>
 #include <sys/time.h>
 #include <atomic>
+#include <climits>
 
 #define USE_LIBEDIT 1
 
@@ -36,7 +37,7 @@ class Unlocker
 {
 	pthread_mutex_t* mLock;
 public:
-	Unlocker(pthread_mutex_t* inLock)
+	Unlocker(pthread_mutex_t* inLock) : mLock(inLock)
 	{
 		pthread_mutex_unlock(mLock);
 	}

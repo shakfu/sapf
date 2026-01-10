@@ -1,0 +1,53 @@
+;; inheritance tests (Dylan linearization)
+1 = throwOnError
+[
+"
+{:name 'object} = object
+{object :name 'boat} = boat
+{boat :name 'day-boat} = day-boat
+{boat :name 'wheel-boat} = wheel-boat
+{day-boat :name 'engineless} = engineless
+{day-boat :name 'small-multihull} = small-multihull
+{small-multihull :name 'small-catamaran} = small-catamaran
+{[engineless wheel-boat] :name 'pedal-wheel-boat} = pedal-wheel-boat
+{[pedal-wheel-boat small-catamaran] :name 'pedalo} = pedalo
+
+{{{{{{{{{
+	:name 'object}
+	:name 'boat}
+	:name 'wheel-boat}
+	:name 'day-boat}
+	:name 'small-multihull}
+	:name 'small-catamaran}
+	:name 'engineless}
+	:name 'pedal-wheel-boat}
+	:name 'pedalo}
+pedalo equals
+"
+"
+{:name 'pane} = pane
+{:name 'scrolling-mixin} = scrolling-mixin
+{:name 'editing-mixin} = editing-mixin
+{[pane scrolling-mixin] :name 'scrollable-pane} = scrollable-pane
+{[pane editing-mixin] :name 'editable-pane} = editable-pane
+{[scrollable-pane editable-pane] :name 'editable-scrollable-pane} = editable-scrollable-pane
+
+{{{{{{
+	:name 'editing-mixin}
+	:name 'scrolling-mixin}
+	:name 'pane}
+	:name 'editable-pane}
+	:name 'scrollable-pane}
+	:name 'editable-scrollable-pane}
+
+editable-scrollable-pane equals
+"
+] aa pr cr
+\s [ "Testing : " pr s pr cr
+	s compile !
+	\[ "Passed" pr cr]
+	\[
+		"*** FAILED ***" pr cr cr
+		throwOnError \[throw] \[] if
+	] if
+] do

@@ -1,0 +1,34 @@
+;; math ops tests
+1 = throwOnError
+[
+"1 2 + 3 equals"
+"2 3 * 6 equals"
+"[1 2] 10 * [10 20] equals"
+"[1 2] 10 ba * [10 20] equals"
+"[1 2] [10 20] ba + [11 22] equals"
+"[1 [2 [3]]] 10 * [10 [20 [30]]] equals"
+"[1 [2 [3]]] 10 ba * [10 [20 [30]]] equals"
+"[1 [2 [3]]] [10 20] * [10 [40 [60]]] equals"
+"[1 [2 [3]]] [10 20] ba * [10 [40 [60]]] equals"
+"[1 2] [3 4 5] * [3 8] equals"
+"[1 2 3 4] +/ 10 equals"
+"[1 2 3 4] */ 24 equals"
+"[1 2 3 4] +\ [1 3 6 10] equals"
+"[1 2 3 4] *\ [1 2 6 24] equals"
+"[1 2 3 4] +^ [1 3 5 7] equals"
+"[1 2 3 4] -^ [1 1 1 1] equals"
+"[1 2 3 [10 20]] +/ [16 26] equals"
+"[1 2 3 [10 20] 4] +\ [1 3 6 [16 26][20 30]] equals"
+"#[1 2] 10 * #[10 20] equals"
+" [1 2] #[10 20] ba + [#[11 21] #[12 22]] equals"
+"#[1 2]  [10 20] ba + [#[11 12] #[21 22]] equals"
+"#[1 2] #[10 20] ba + #[11 22] equals"
+] aa pr cr
+\s [ "Testing : " pr s pr cr
+	s compile !
+	\[ "Passed" pr cr]
+	\[
+		"*** FAILED ***" pr cr cr
+		throwOnError \[throw] \[] if
+	] if
+] do

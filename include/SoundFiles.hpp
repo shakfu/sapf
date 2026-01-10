@@ -18,14 +18,20 @@
 #define __taggeddoubles__SoundFiles__
 
 #include "VM.hpp"
+
+#if defined(__APPLE__)
 #include <AudioToolbox/ExtendedAudioFile.h>
+#endif
 
 const int kMaxSFChannels = 1024;
 const int kBufSize = 1024;
 
 void makeRecordingPath(Arg filename, char* path, int len);
 
+#if defined(__APPLE__)
 ExtAudioFileRef sfcreate(Thread& th, const char* path, int numChannels, double fileSampleRate, bool interleaved);
+#endif
+
 void sfwrite(Thread& th, V& v, Arg filename, bool openIt);
 void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames);
 

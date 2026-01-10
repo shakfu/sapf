@@ -1,0 +1,31 @@
+;; conditionals and refs tests
+1 = throwOnError
+[
+"1  \['a]\['b] if 'a equals"
+"0  \['a]\['b] if 'b equals"
+"'x \['a]\['b] if 'a equals"
+"1 get 1 equals"
+"1 R get 1 equals"
+"1 R = r  2 r set  r get 2 equals"
+"1 ZR get 1 equals"
+"1 ZR = r  2 r set  r get 2 equals"
+"3 ! 3 equals"
+"\[3] ! 3 equals"
+"\[[1 2]] ! [1 2] equals"
+"7 4 \a b[a b -] ! 3 equals"
+"5/4 1.25 equals"
+"1 \a [a] ! 1 equals"
+"1 2 \a b [a] ! 1 equals"
+"1 2 \a b [b] ! 2 equals"
+"1 2 3 \a b c [a] ! 1 equals"
+"1 2 3 \a b c [b] ! 2 equals"
+"1 2 3 \a b c [c] ! 3 equals"
+] aa pr cr
+\s [ "Testing : " pr s pr cr
+	s compile !
+	\[ "Passed" pr cr]
+	\[
+		"*** FAILED ***" pr cr cr
+		throwOnError \[throw] \[] if
+	] if
+] do

@@ -25,8 +25,7 @@ count leading zeroes function and those that can be derived from it
 #ifndef _CLZ_
 #define _CLZ_
 
-#include <TargetConditionals.h>
-
+#include <cstdint>
 
 static int32_t CLZ( int32_t arg )
 {

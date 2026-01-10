@@ -1,0 +1,30 @@
+;; size reverse tests
+1 = throwOnError
+[
+"123 size 1 equals"
+"[] size 0 equals"
+"[1] size 1 equals"
+"[1 2] size 2 equals"
+"[] reverse [] equals"
+"[1] reverse [1] equals"
+"[1 2] reverse [2 1] equals"
+"[1 2 3] reverse [3 2 1] equals"
+"#[] size 0 equals"
+"#[1] size 1 equals"
+"#[1 2] size 2 equals"
+"#[] reverse #[] equals"
+"#[1] reverse #[1] equals"
+"#[1 2] reverse #[2 1] equals"
+"#[1 2 3] reverse #[3 2 1] equals"
+"ord finite 0 equals"
+"1 10 to finite 1 equals"
+"ord 1 10 to + finite 1 equals"
+] aa pr cr
+\s [ "Testing : " pr s pr cr
+	s compile !
+	\[ "Passed" pr cr]
+	\[
+		"*** FAILED ***" pr cr cr
+		throwOnError \[throw] \[] if
+	] if
+] do

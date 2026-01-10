@@ -24,3 +24,12 @@ xcshareddata/
 *.xccheckout
 *.moved-aside
 *.xcuserstate
+*._cache
+
+# agents
+.claude
+.cursor
+.cursorrules
+CLAUDE.md
+AGENTS.md
+GEMINI.md

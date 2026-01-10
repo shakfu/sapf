@@ -1,0 +1,43 @@
+;; forms tests
+1 = throwOnError
+[
+"{:a 1 :b 2 :c 3}.a 1 equals"
+"{:a 1 :b 2 :c 3}.b 2 equals"
+"{:a 1 :b 2 :c 3}.c 3 equals"
+"{{{:a 1} :b 2} :c 3}.a 1 equals"
+"{{{:a 1} :b 2} :c 3}.b 2 equals"
+"{{{:a 1} :b 2} :c 3}.c 3 equals"
+"{:a 1} {:a 1} equals"
+"{:a 1} {:a 2} equals not"
+"{:a 1} {:a 1 :b 2} equals not"
+"{:a 1 :b 2} {:a 1} equals not"
+"{{:c 2} :a 1} {{:c 2} :a 1} equals"
+"{{:c 2} :a 1} {{:c 3} :a 1} equals not"
+"{{:c 3} :a 1} {{:c 2} :a 1} equals not"
+"{:a 1} = a    {a :b 2} = b    b {{:a 1} :b 2}   equals"
+"{:a 1 :b 2 :c 3} 'a has"
+"{:a 1 :b 2 :c 3} 'b has"
+"{:a 1 :b 2 :c 3} 'c has"
+"{:a 1 :b 2 :c 3} 'd has not"
+"{{{:a 1} :b 2} :c 3} 'a has"
+"{{{:a 1} :b 2} :c 3} 'b has"
+"{{{:a 1} :b 2} :c 3} 'c has"
+"{{{:a 1} :b 2} :c 3} 'd has not"
+"{:a 1 :b 2 :c 3} keys sort ['a 'b 'c] equals"
+"{:a 1 :b 2 :c 3} values sort [1 2 3] equals"
+"{:a 1 :b 2 :c 3} kv \k v[ k sort ['a 'b 'c] equals v sort [1 2 3] equals &] !"
+"{{{:a 1} :b 2} :c 3} keys ['c] equals"
+"{{{:a 1} :b 2} :c 3} parent {{:a 1} :b 2} equals"
+"{{{:a 1} :b 2} :c 3} local {:c 3} equals"
+"{{{:a 1} :b 2} :c 3} 'a dot 1 equals"
+"{{{:a 1} :b 2} :c 3} 'b dot 2 equals"
+"{{{:a 1} :b 2} :c 3} 'c dot 3 equals"
+] aa pr cr
+\s [ "Testing : " pr s pr cr
+	s compile !
+	\[ "Passed" pr cr]
+	\[
+		"*** FAILED ***" pr cr cr
+		throwOnError \[throw] \[] if
+	] if
+] do

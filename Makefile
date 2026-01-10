@@ -1,5 +1,5 @@
 
-.phony: all build xcode xcode-native xcode-universal clean
+.phony: all build clean test
 
 
 all: build
@@ -10,13 +10,8 @@ build:
 		cmake .. && \
 		cmake --build . --config Release
 
-xcode: xcode-native
-
-xcode-native:
-	@xcodebuild -project SoundAsPureForm.xcodeproj -arch arm64 -target SoundAsPureForm 
-
-xcode-universal:
-	@xcodebuild -project SoundAsPureForm.xcodeproj -target SoundAsPureForm 
+test: build
+	@cd build && ctest --output-on-failure
 
 clean:
 	@rm -rf build
