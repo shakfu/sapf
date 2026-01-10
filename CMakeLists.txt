@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.15)
 
 project(sapf_project)
 
+# Store the sapf root directory for use in subdirectories
+set(SAPF_ROOT ${CMAKE_CURRENT_SOURCE_DIR} CACHE PATH "SAPF root directory")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Optional: Disables compiler extensions beyond the standard
@@ -42,6 +45,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 
 add_subdirectory(libmanta)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 set(RTAUDIO_BUILD_TESTING OFF CACHE BOOL "Disable rtaudio tests" FORCE)
 add_subdirectory(thirdparty/rtaudio)
 set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "Disable rtmidi tests" FORCE)

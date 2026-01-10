@@ -5,7 +5,9 @@
 #include "sapf/backends/AlsaAudioBackend.hpp"
 #include "sapf/backends/CoreAudioBackend.hpp"
 #include "sapf/backends/NullAudioBackend.hpp"
+#ifdef SAPF_USE_RTAUDIO
 #include "sapf/backends/RtAudioBackend.hpp"
+#endif
 
 namespace {
 
@@ -42,15 +44,19 @@ void EnsureDefaultAudioBackend()
 		SetAudioBackend(CreateCoreAudioBackend());
 		return;
 	}
+#ifdef SAPF_USE_RTAUDIO
 	if (auto backend = CreateRtAudioBackend()) {
 		SetAudioBackend(std::move(backend));
 		return;
 	}
+#endif
 #elif defined(__linux__)
+#ifdef SAPF_USE_RTAUDIO
 	if (auto backend = CreateRtAudioBackend()) {
 		SetAudioBackend(std::move(backend));
 		return;
 	}
+#endif
 	if (SupportsAlsaAudioBackend()) {
 		auto backend = CreateAlsaAudioBackend();
 		if (backend) {
@@ -59,17 +65,21 @@ void EnsureDefaultAudioBackend()
 		}
 	}
 #elif defined(_WIN32)
+#ifdef SAPF_USE_RTAUDIO
 	if (auto backend = CreateRtAudioBackend()) {
 		SetAudioBackend(std::move(backend));
 		return;
 	}
+#endif
 	SetAudioBackend(CreateNullAudioBackend("Windows audio backend will use RtAudio once configured."));
 	return;
 #else
+#ifdef SAPF_USE_RTAUDIO
 	if (auto backend = CreateRtAudioBackend()) {
 		SetAudioBackend(std::move(backend));
 		return;
 	}
+#endif
 #endif
 
 	SetAudioBackend(CreateNullAudioBackend("Audio backend not available on this platform."));

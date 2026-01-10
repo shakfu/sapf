@@ -1,3 +1,7 @@
+option(SAPF_USE_RTAUDIO "Include RtAudio backend" ON)
+option(SAPF_USE_RTMIDI "Include RtMidi backend" ON)
+option(SAPF_USE_MANTA "Include Manta controller support" OFF)
+
 set(ENGINE_SOURCES
 	MidiBackend.cpp
 	MidiRouter.cpp
@@ -13,9 +17,7 @@ set(ENGINE_SOURCES
 	Midi.cpp
 	backends/MaxAudioBackend.cpp
 	backends/AlsaAudioBackend.cpp
-	backends/RtAudioBackend.cpp
 	backends/CoreMidiBackend.cpp
-	backends/RtMidiBackend.cpp
 	backends/NullMidiBackend.cpp
 	MultichannelExpansion.cpp
 	Object.cpp
@@ -38,6 +40,14 @@ set(ENGINE_SOURCES
 	VM.cpp
 )
 
+if(SAPF_USE_RTAUDIO)
+	list(APPEND ENGINE_SOURCES backends/RtAudioBackend.cpp)
+endif()
+
+if(SAPF_USE_RTMIDI)
+	list(APPEND ENGINE_SOURCES backends/RtMidiBackend.cpp)
+endif()
+
 # Platform-specific sources
 if(APPLE)
 	list(APPEND ENGINE_SOURCES makeImage.mm)
@@ -51,20 +61,39 @@ add_library(
 	${ENGINE_SOURCES}
 )
 
+# Add compile definitions for optional features
+if(SAPF_USE_MANTA)
+	target_compile_definitions(sapf_engine PUBLIC SAPF_USE_MANTA)
+endif()
+
+if(SAPF_USE_RTAUDIO)
+	target_compile_definitions(sapf_engine PUBLIC SAPF_USE_RTAUDIO)
+endif()
+
+if(SAPF_USE_RTMIDI)
+	target_compile_definitions(sapf_engine PUBLIC SAPF_USE_RTMIDI)
+endif()
+
 target_include_directories(
 	sapf_engine
 	PUBLIC
-	${CMAKE_SOURCE_DIR}/include
-	${CMAKE_SOURCE_DIR}/thirdparty/rtaudio
-	${CMAKE_SOURCE_DIR}/thirdparty/rtmidi
+	${SAPF_ROOT}/include
 )
+
+if(SAPF_USE_RTAUDIO)
+	target_include_directories(sapf_engine PUBLIC ${SAPF_ROOT}/thirdparty/rtaudio)
+endif()
+
+if(SAPF_USE_RTMIDI)
+	target_include_directories(sapf_engine PUBLIC ${SAPF_ROOT}/thirdparty/rtmidi)
+endif()
 
 # FFTW include directory for non-Apple platforms
 if(NOT APPLE)
 	target_include_directories(
 		sapf_engine
 		PUBLIC
-		${CMAKE_SOURCE_DIR}/thirdparty/fftw-3.3.10/api
+		${SAPF_ROOT}/thirdparty/fftw-3.3.10/api
 	)
 endif()
 
@@ -93,13 +122,17 @@ else()
 endif()
 
 # Base libraries
-target_link_libraries(
-	sapf_engine
-	PUBLIC
-	manta
-	rtaudio
-	rtmidi
-)
+if(SAPF_USE_MANTA)
+	target_link_libraries(sapf_engine PUBLIC manta)
+endif()
+
+if(SAPF_USE_RTAUDIO)
+	target_link_libraries(sapf_engine PUBLIC rtaudio)
+endif()
+
+if(SAPF_USE_RTMIDI)
+	target_link_libraries(sapf_engine PUBLIC rtmidi)
+endif()
 
 # Platform-specific libraries
 if(APPLE)
