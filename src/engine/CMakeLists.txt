@@ -40,7 +40,6 @@ set(ENGINE_SOURCES
 	VM.cpp
 )
 
-
 if(SAPF_USE_RTAUDIO)
 	list(APPEND ENGINE_SOURCES backends/RtAudioBackend.cpp)
 endif()
@@ -78,16 +77,16 @@ endif()
 target_include_directories(
 	sapf_engine
 	PUBLIC
-	${CMAKE_SOURCE_DIR}/include
-	${CMAKE_SOURCE_DIR}/thirdparty/replxx/include
+	${SAPF_ROOT}/include
+	${SAPF_ROOT}/thirdparty/replxx/include
 )
 
 if(SAPF_USE_RTAUDIO)
-	target_include_directories(sapf_engine PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty/rtaudio)
+	target_include_directories(sapf_engine PUBLIC ${SAPF_ROOT}/thirdparty/rtaudio)
 endif()
 
 if(SAPF_USE_RTMIDI)
-	target_include_directories(sapf_engine PUBLIC ${CMAKE_SOURCE_DIR}/thirdparty/rtmidi)
+	target_include_directories(sapf_engine PUBLIC ${SAPF_ROOT}/thirdparty/rtmidi)
 endif()
 
 # FFTW include directory for non-Apple platforms
@@ -95,7 +94,7 @@ if(NOT APPLE)
 	target_include_directories(
 		sapf_engine
 		PUBLIC
-		${CMAKE_SOURCE_DIR}/thirdparty/fftw-3.3.10/api
+		${SAPF_ROOT}/thirdparty/fftw-3.3.10/api
 	)
 endif()
 
