@@ -11,7 +11,10 @@
 #include <thread>
 #endif
 
+#ifdef SAPF_USE_MANTA
 #include "Manta.h"
+#endif
+
 #include "sapf/AudioBackend.hpp"
 
 extern void AddCoreOps();
@@ -27,6 +30,7 @@ namespace {
 
 const char* gVersionString = "0.1.22";
 
+#ifdef SAPF_USE_MANTA
 class MyManta : public Manta
 {
 	void PadEvent(int row, int column, int id, int value) override {
@@ -53,6 +57,7 @@ Manta* manta()
 	static MyManta* sManta = new MyManta();
 	return sManta;
 }
+#endif // SAPF_USE_MANTA
 
 } // namespace
 
@@ -120,6 +125,7 @@ void SapfEngine::configureLogFile()
 
 void SapfEngine::startMantaEventLoop() const
 {
+#ifdef SAPF_USE_MANTA
 	if (!config_.enableManta) {
 		return;
 	}
@@ -154,6 +160,7 @@ void SapfEngine::startMantaEventLoop() const
 		}
 	}).detach();
 #endif
+#endif // SAPF_USE_MANTA
 }
 
 void SapfEngine::loadPrelude(Thread& th) const

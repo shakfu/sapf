@@ -42,9 +42,9 @@ Thread::Thread()
 	mWorkspace(new GForm()),
     parsingWhat(parsingWords),
     fromString(false),
-#if USE_LIBEDIT
-    el(nullptr),
-    myhistory(nullptr),
+#if USE_REPLXX
+    replxx(nullptr),
+    currentLine(nullptr),
 #endif
     line(NULL)
 {
@@ -56,9 +56,9 @@ Thread::Thread(const Thread& inParent)
     mWorkspace(inParent.mWorkspace),
     parsingWhat(parsingWords),
     fromString(false),
-#if USE_LIBEDIT
-    el(nullptr),
-    myhistory(nullptr),
+#if USE_REPLXX
+    replxx(nullptr),
+    currentLine(nullptr),
 #endif
     line(NULL)
 {
@@ -71,9 +71,9 @@ Thread::Thread(const Thread& inParent, P<Fun> const& inFun)
     mWorkspace(inParent.mWorkspace),
     parsingWhat(parsingWords),
     fromString(false),
-#if USE_LIBEDIT
-    el(nullptr),
-    myhistory(nullptr),
+#if USE_REPLXX
+    replxx(nullptr),
+    currentLine(nullptr),
 #endif
     line(NULL)
 {
@@ -213,57 +213,80 @@ VM::~VM()
 {
 }
 
-#if USE_LIBEDIT
-static const char* prompt(EditLine *e) 
+#if USE_REPLXX
+static const char* getPrompt(int parsingWhat)
 {
-  return "sapf> ";
-}
-static const char* promptParen(EditLine *e) 
-{
-  return "(sapf> ";
-}
-static const char* promptSquareBracket(EditLine *e) 
-{
-  return "[sapf> ";
-}
-static const char* promptCurlyBracket(EditLine *e) 
-{
-  return "{sapf> ";
-}
-static const char* promptLambda(EditLine *e) 
-{
-  return "\\sapf> ";
-}
-static const char* promptString(EditLine *e) 
-{
-  return "\"sapf> ";
+	switch (parsingWhat) {
+		default:
+		case parsingWords:  return "sapf> ";
+		case parsingString: return "\"sapf> ";
+		case parsingParens: return "(sapf> ";
+		case parsingLambda: return "\\sapf> ";
+		case parsingArray:  return "[sapf> ";
+		case parsingEnvir:  return "{sapf> ";
+	}
 }
 #endif
 
 void Thread::getLine()
-{	
+{
 	if (fromString) return;
-	switch (parsingWhat) {
-		default: case parsingWords : el_set(el, EL_PROMPT, &prompt); break;
-		case parsingString : el_set(el, EL_PROMPT, &promptString); break;
-		case parsingParens : el_set(el, EL_PROMPT, &promptParen); break;
-		case parsingLambda : el_set(el, EL_PROMPT, &promptLambda); break;
-		case parsingArray : el_set(el, EL_PROMPT, &promptSquareBracket); break;
-		case parsingEnvir : el_set(el, EL_PROMPT, &promptCurlyBracket); break;
+#if USE_REPLXX
+	// Free previous line if any (our malloc'd buffer with added newline)
+	if (currentLine) {
+		free(currentLine);
+		currentLine = nullptr;
 	}
-	line = el_gets(el, &linelen);
-	linepos = 0;
-	if (!line || strncmp(line, "quit", 4)==0 || strncmp(line, "..", 2)==0) { line = NULL; throw errUserQuit; }
-	if (linelen > 0) {
-		history(myhistory, &ev, H_ENTER, line);
-		history(myhistory, &ev, H_SAVE, historyfilename);
+
+	const char* prompt = getPrompt(parsingWhat);
+	const char* input = replxx_input(replxx, prompt);
+
+	if (!input || strncmp(input, "quit", 4)==0 || strncmp(input, "..", 2)==0) {
+		line = NULL;
+		throw errUserQuit;
+	}
+
+	// Add to history (replxx returns line without newline)
+	size_t origLen = strlen(input);
+	if (origLen > 0) {
+		replxx_history_add(replxx, input);
+		replxx_history_save(replxx, historyfilename);
 		if (logfilename) {
 			FILE* logfile = fopen(logfilename, "a");
 			logTimestamp(logfile);
-			fwrite(line, 1, strlen(line), logfile);
+			fwrite(input, 1, origLen, logfile);
+			fputc('\n', logfile);
 			fclose(logfile);
 		}
 	}
+
+	// Append newline to match libedit behavior (parser expects it)
+	// Note: replxx manages input memory, so we make our own copy
+	currentLine = (char*)malloc(origLen + 2);
+	memcpy(currentLine, input, origLen);
+	currentLine[origLen] = '\n';
+	currentLine[origLen + 1] = '\0';
+
+	line = currentLine;
+	linelen = (int)(origLen + 1);
+	linepos = 0;
+#else
+	// Fallback for platforms without replxx
+	static char inputBuffer[4096];
+	printf("%s", parsingWhat == parsingWords ? "sapf> " : "...> ");
+	fflush(stdout);
+	if (!fgets(inputBuffer, sizeof(inputBuffer), stdin)) {
+		line = NULL;
+		throw errUserQuit;
+	}
+	line = inputBuffer;
+	linelen = (int)strlen(line);
+	linepos = 0;
+	if (!line || strncmp(line, "quit", 4)==0 || strncmp(line, "..", 2)==0) {
+		line = NULL;
+		throw errUserQuit;
+	}
+#endif
 }
 
 void Thread::logTimestamp(FILE* logfile)
@@ -312,34 +335,35 @@ void Thread::repl(FILE* infile, const char* inLogfilename)
 	Thread& th = *this;
 
 	logfilename = inLogfilename;
-	
+
 	previousTimeStamp = 0;
 
-#if USE_LIBEDIT
-	el = el_init("sc", stdin, stdout, stderr);
-	el_set(el, EL_PROMPT, &prompt);
-	el_set(el, EL_EDITOR, "emacs");
-	el_set(el, EL_BIND, "-s", "\t", "    ", NULL);
+#if USE_REPLXX
+	// Initialize replxx
+	replxx = replxx_init();
 
-	myhistory = history_init();
-	if (myhistory == 0) {
-		post("history could not be initialized\n");
-		return;
-	}
-
+	// Set up history file path
 	const char* envHistoryFileName = getenv("SAPF_HISTORY");
 	if (envHistoryFileName) {
 		snprintf(historyfilename, PATH_MAX, "%s", envHistoryFileName);
 	} else {
 		const char* homeDir = getenv("HOME");
-		snprintf(historyfilename, PATH_MAX, "%s/sapf-history.txt", homeDir);
-	}
-	history(myhistory, &ev, H_SETSIZE, 800);
-	history(myhistory, &ev, H_LOAD, historyfilename);
-	history(myhistory, &ev, H_SETUNIQUE, 1);
-	el_set(el, EL_HIST, history, myhistory);
+#ifdef _WIN32
+		if (!homeDir) homeDir = getenv("USERPROFILE");
 #endif
-	
+		if (homeDir) {
+			snprintf(historyfilename, PATH_MAX, "%s/sapf-history.txt", homeDir);
+		} else {
+			snprintf(historyfilename, PATH_MAX, "sapf-history.txt");
+		}
+	}
+
+	// Configure replxx
+	replxx_set_max_history_size(replxx, 800);
+	replxx_set_unique_history(replxx, 1);
+	replxx_history_load(replxx, historyfilename);
+#endif
+
 	fflush(infile);
 	bool running = true;
 
@@ -393,12 +417,16 @@ void Thread::repl(FILE* infile, const char* inLogfilename)
 		}
 
 	} while (running);
-	
 
-#if USE_LIBEDIT
-	history(myhistory, &ev, H_SAVE, historyfilename);
-	history_end(myhistory);
-	el_end(el);
+#if USE_REPLXX
+	// Save history and clean up
+	replxx_history_save(replxx, historyfilename);
+	if (currentLine) {
+		free(currentLine);  // We use malloc to add newline
+		currentLine = nullptr;
+	}
+	replxx_end(replxx);
+	replxx = nullptr;
 #endif
 }
 

@@ -32,7 +32,8 @@
 #include "RCObj.hpp"
 #include "PlatformLock.hpp"
 
-void post(const char* fmt, ...);
+// Use C linkage for post() to be compatible with Max SDK
+extern "C" void post(const char* fmt, ...);
 
 #define COLLECT_MINFO 1
 

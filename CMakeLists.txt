@@ -42,11 +42,16 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 
 add_subdirectory(libmanta)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 set(RTAUDIO_BUILD_TESTING OFF CACHE BOOL "Disable rtaudio tests" FORCE)
 add_subdirectory(thirdparty/rtaudio)
 set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "Disable rtmidi tests" FORCE)
 set(RTMIDI_TARGETNAME_UNINSTALL "rtmidi_uninstall" CACHE STRING "Unique uninstall target for rtmidi" FORCE)
 add_subdirectory(thirdparty/rtmidi)
+
+# Replxx for cross-platform line editing
+set(REPLXX_BUILD_EXAMPLES OFF CACHE BOOL "Disable replxx examples" FORCE)
+add_subdirectory(thirdparty/replxx)
 
 # FFTW for non-Apple platforms
 if(NOT APPLE)

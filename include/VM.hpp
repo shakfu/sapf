@@ -25,10 +25,12 @@
 #include <atomic>
 #include <climits>
 
-#define USE_LIBEDIT 1
+#define USE_REPLXX 1
 
-#if USE_LIBEDIT
-#include <histedit.h>
+#if USE_REPLXX
+extern "C" {
+#include "replxx.h"
+}
 #endif
 
 extern pthread_mutex_t gHelpMutex;
@@ -158,10 +160,9 @@ public:
 	bool fromString;
 	
 	// edit line
-#if USE_LIBEDIT
-	EditLine *el;
-	History *myhistory;
-	HistEvent ev;
+#if USE_REPLXX
+	Replxx* replxx;
+	char* currentLine;  // our copy with added newline
 	char historyfilename[PATH_MAX];
 #endif
 	const char *line;

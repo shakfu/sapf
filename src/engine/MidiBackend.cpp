@@ -4,7 +4,9 @@
 
 #include "sapf/backends/CoreMidiBackend.hpp"
 #include "sapf/backends/NullMidiBackend.hpp"
+#ifdef SAPF_USE_RTMIDI
 #include "sapf/backends/RtMidiBackend.hpp"
+#endif
 
 namespace {
 
@@ -41,27 +43,35 @@ void EnsureDefaultMidiBackend()
 		SetMidiBackend(CreateCoreMidiBackend());
 		return;
 	}
+#ifdef SAPF_USE_RTMIDI
 	if (auto backend = CreateRtMidiBackend()) {
 		SetMidiBackend(std::move(backend));
 		return;
 	}
+#endif
 #elif defined(__linux__)
+#ifdef SAPF_USE_RTMIDI
 	if (auto backend = CreateRtMidiBackend()) {
 		SetMidiBackend(std::move(backend));
 		return;
 	}
+#endif
 #elif defined(_WIN32)
+#ifdef SAPF_USE_RTMIDI
 	if (auto backend = CreateRtMidiBackend()) {
 		SetMidiBackend(std::move(backend));
 		return;
 	}
+#endif
 	SetMidiBackend(CreateNullMidiBackend("Windows MIDI backend will use RtMidi once configured."));
 	return;
 #else
+#ifdef SAPF_USE_RTMIDI
 	if (auto backend = CreateRtMidiBackend()) {
 		SetMidiBackend(std::move(backend));
 		return;
 	}
+#endif
 #endif
 
 	SetMidiBackend(CreateNullMidiBackend("MIDI backend not available on this platform."));
