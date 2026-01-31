@@ -69,9 +69,6 @@ struct BinaryOpLink : public BinaryOp
     virtual V makeZList(Thread& th, Arg a, Arg b);
 };
 
-// Default implementation
-inline V BinaryOp::stringOp(P<String> const& a, P<String> const& b) { throw errUndefinedOperation; }
-
 //==============================================================================
 // V - Tagged Value
 //
@@ -196,5 +193,12 @@ public:
     V binaryOpWithVList(Thread& th, BinaryOp* op, List* _a) const;
     V binaryOpWithZList(Thread& th, BinaryOp* op, List* _a) const;
 };
+
+//==============================================================================
+// Inline implementations that need complete V type
+//==============================================================================
+
+// Default implementation - V is now complete
+inline V BinaryOp::stringOp(P<String> const& a, P<String> const& b) { throw errUndefinedOperation; }
 
 #endif // SAPF_VALUE_HPP

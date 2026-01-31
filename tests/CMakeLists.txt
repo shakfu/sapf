@@ -1,5 +1,10 @@
 # SAPF Tests using CTest
 
+# Unit tests (C++ with Google Test)
+add_subdirectory(unit)
+
+# Integration tests (sapf language)
+
 # Smoke test - minimal test to verify sapf starts
 add_test(
     NAME smoke

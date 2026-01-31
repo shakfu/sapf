@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Unit test infrastructure** using Google Test framework
+  - `tests/unit/test_refcount.cpp` - P<T> smart pointer and reference counting (16 tests)
+  - `tests/unit/test_value.cpp` - V class operations, type checking, conversions (35 tests)
+  - `tests/unit/test_symbol.cpp` - Symbol interning, thread safety, concurrent access (17 tests)
+  - `tests/unit/test_hash.cpp` - Hash() and Hash64() functions, distribution tests (15 tests)
+  - Total: 83 new unit tests alongside 18 existing integration tests
+- **Vendored GoogleTest v1.14.0** in `thirdparty/googletest/` for reproducible offline builds
 - **ARCHITECTURE.md** - Comprehensive documentation of the VM execution model, reference counting system, and threading guarantees
 - **REVIEW.md** - Code review with analysis of architecture, modularity, and recommendations
 - **Platform abstraction layer** (`include/sapf/platform/Platform.hpp`) - Cross-platform interface for async execution and REPL loops

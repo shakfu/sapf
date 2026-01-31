@@ -14,6 +14,9 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#ifndef SAPF_RC_PTR_HPP
+#define SAPF_RC_PTR_HPP
+
 // An intrusive reference counting smart pointer.
 
 template <class T>
@@ -137,3 +140,4 @@ bool operator<(P<T> const & a, P<U> const & b) // never throws
 	return a.p_ < b.p_;
 }
 
+#endif // SAPF_RC_PTR_HPP

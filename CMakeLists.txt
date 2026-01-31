@@ -69,4 +69,9 @@ add_subdirectory(src/cli)
 
 # Testing
 enable_testing()
+
+# Google Test for unit tests (vendored in thirdparty/)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+add_subdirectory(thirdparty/googletest)
+
 add_subdirectory(tests)
