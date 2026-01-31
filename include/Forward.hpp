@@ -14,12 +14,19 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef __Forward_h__
-#define __Forward_h__
+#ifndef SAPF_FORWARD_HPP
+#define SAPF_FORWARD_HPP
 
 #include <stdint.h>
+#include <cmath>
+#include "RCObj.hpp"
+#include "rc_ptr.hpp"
+#include "ErrorCodes.hpp"
 
-// Forward declarations for all major SAPF types
+//==============================================================================
+// Forward Declarations
+//==============================================================================
+
 class VM;
 class Thread;
 class Object;
@@ -44,8 +51,14 @@ class EachOp;
 class Plug;
 class ZPlug;
 
-// Common type aliases
+//==============================================================================
+// Basic Type Definitions
+//==============================================================================
+
+// Object pointer alias
 typedef Object* O;
+
+// Argument type (const reference to V)
 typedef V const& Arg;
 
 // Sample type - double precision for audio
@@ -56,22 +69,53 @@ typedef double Z;
 typedef float Z;
 #endif
 
-// Loop macros
-#define LOOP(I,N) for (int I = 0;  i < (N); ++I)
-#define LOOP2(I,S,N) for (int I = S;  i < (N); ++I)
+// NaN constant
+const double NaN = NAN;
 
-// List item types
-enum {
-    itemTypeV,
-    itemTypeZ
-};
+//==============================================================================
+// Flags and Constants
+//==============================================================================
 
 // Object flags
-enum {
+enum ObjectFlags {
     flag_NoEachOps = 1
+};
+
+// List item types
+enum ItemType {
+    itemTypeV = 0,
+    itemTypeZ = 1
 };
 
 // Maximum arguments for operations
 const int kMaxArgs = 16;
 
-#endif // __Forward_h__
+//==============================================================================
+// Loop Macros
+//==============================================================================
+
+#define LOOP(I,N) for (int I = 0; I < (N); ++I)
+#define LOOP2(I,S,N) for (int I = S; I < (N); ++I)
+
+//==============================================================================
+// Primitive Function Type
+//==============================================================================
+
+typedef void (*PrimFun)(Thread& th, Prim*);
+
+//==============================================================================
+// Error Functions
+//==============================================================================
+
+[[noreturn]] void wrongType(const char* msg, const char* expected, Arg got);
+[[noreturn]] void syntaxError(const char* msg);
+[[noreturn]] void indefiniteOp(const char* msg1, const char* msg2);
+[[noreturn]] void notFound(Arg key);
+
+//==============================================================================
+// Post function (Max SDK compatible)
+//==============================================================================
+
+extern "C" void post(const char* fmt, ...);
+
+#endif // SAPF_FORWARD_HPP

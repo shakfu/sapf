@@ -17,510 +17,46 @@
 #ifndef __Object_h__
 #define __Object_h__
 
+//==============================================================================
+// Include modular headers in dependency order
+//==============================================================================
+
+// Forward declarations and basic types
+#include "Forward.hpp"
+
+// Value type (V) - declaration only, no inline implementations
+#include "Value.hpp"
+
+// Object base class
+#include "ObjectBase.hpp"
+
+// String class
+#include "String.hpp"
+
+//==============================================================================
+// Additional includes needed by remaining classes
+//==============================================================================
+
 #include <assert.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <string>
 #include <vector>
-#include "Hash.hpp"
-#include "ErrorCodes.hpp"
 #include "MathFuns.hpp"
-
-#include <pthread.h>
-#include "RCObj.hpp"
 #include "PlatformLock.hpp"
-
-// Use C linkage for post() to be compatible with Max SDK
-extern "C" void post(const char* fmt, ...);
 
 #define COLLECT_MINFO 1
 
-class VM;
-class Thread;
-class Object;
-class String;
-class Code;
-class GForm;
-class GTable;
-class Form;
-class Table;
-class Fun;
-class Prim;
-class List;
-class Gen;
-class Array;
-class V;
-
-class TableMap;
-
-typedef Object* O;
-typedef V const& Arg;
-
-#define LOOP(I,N) for (int I = 0;  i < (N); ++I)
-#define LOOP2(I,S,N) for (int I = S;  i < (N); ++I)
-
-#define SAMPLE_IS_DOUBLE 1
-#if SAMPLE_IS_DOUBLE 
-typedef double Z;
-#else
-typedef float Z;
-#endif
-
-const double NaN = NAN;
-
-struct UnaryOp 
-{
-	virtual ~UnaryOp() {}
-	virtual const char *Name() = 0;
-	virtual double op(double a) = 0;
-	virtual void loop(Thread& th, int n, V *a, int astride, V *out);
-	virtual void loopz(int n, const Z *a, int astride, Z *out) = 0;
-};
-
-struct BinaryOp
-{
-	virtual ~BinaryOp() {}
-	virtual const char *Name() = 0;
-	virtual double op(double a, double b) = 0;
-
-	virtual void loop(Thread& th, int n, V *a, int astride, V *b, int bstride, V *out);
-	virtual void scan(Thread& th, int n, V& z, V *a, int astride, V *out);
-	virtual void pairs(Thread& th, int n, V& z, V *a, int astride, V *out);
-	virtual void reduce(Thread& th, int n, V& z, V *a, int astride);
-
-	virtual void loopz(int n, const Z *a, int astride, const Z *b, int bstride, Z *out) = 0;
-	virtual void scanz(int n, Z& z, Z *a, int astride, Z *out) { throw errUndefinedOperation; }
-	virtual void pairsz(int n, Z& z, Z *a, int astride, Z *out) { throw errUndefinedOperation; }
-	virtual void reducez(int n, Z& z, Z *a, int astride) { throw errUndefinedOperation; }
-
-	virtual void loopzv(Thread& th, int n, Z *aa, int astride, V *bb, int bstride, V *out);
-	virtual void loopvz(Thread& th, int n, V *aa, int astride, Z *bb, int bstride, V *out);
-	
-	virtual V makeVList(Thread& th, Arg a, Arg b);
-	virtual V makeZList(Thread& th, Arg a, Arg b);
-
-	virtual V stringOp(P<String> const& a, P<String> const& b);
-};
-
-struct BinaryOpLink : public BinaryOp
-{
-	virtual ~BinaryOpLink() {}
-	virtual V makeVList(Thread& th, Arg a, Arg b);
-	virtual V makeZList(Thread& th, Arg a, Arg b);
-};
-
-[[noreturn]] void wrongType(const char* msg, const char* expected, Arg got);
-[[noreturn]] void syntaxError(const char* msg);
-[[noreturn]] void indefiniteOp(const char* msg1, const char* msg2);
-[[noreturn]] void notFound(Arg key);
-
-// V - a tagged value. either a number or a pointer to an object
-class V
-{
-public:	
-    P<Object> o;
-	union {
-		double f;
-		int64_t i;
-	};
-	
-	V() : o(NULL), f(0.) {}
-	V(O _o)  : o(_o), f(0.) {}
-	V(double _f) : o(NULL), f(_f) {}
-	template <typename U> V(P<U> const& p) : o(p()), f(0.) {}
-	
-	O asObj() const { if (!o) wrongType("asObj : v", "Object", *this); return o(); }
-
-	template <typename T>
-	void set(P<T> const& p) { o = p(); }
-	void set(O _o) { o = _o; }
-	void set(double _f) { o = nullptr; f = _f; }
-	void set(Arg v) { o = v.o; f = v.f; }
-	
-	double asFloat() const;
-	int64_t asInt() const;
-	
-	bool isFinite() const;
-	bool done() const;
-	
-	void SetNoEachOps();
-	
-	const char* TypeName() const;
-	const char* OneLineHelp() const;
-	const char* GetAutoMapMask() const;
-
-	void apply(Thread& th);
-	V deref();
-	Z derefz();
-
-	int64_t length(Thread& th);
-	Z atz(int64_t index);
-	Z wrapAtz(int64_t index);
-	Z foldAtz(int64_t index);
-	Z clipAtz(int64_t index);
-	V at(int64_t index);
-	V wrapAt(int64_t index);
-	V foldAt(int64_t index);
-	V clipAt(int64_t index);
-	V comma(Thread& th, Arg key);
-	bool dot(Thread& th, Arg key, V& ioValue);
-	V msgSend(Thread& th, Arg receiver);
-
-	V mustGet(Thread& th, Arg key) const;
-	bool get(Thread& th, Arg key, V& value) const;
-	
-	V chase(Thread& th, int64_t n);
-	
-	int Hash() const;
-
-	uint16_t takes() const;
-	uint16_t leaves() const;
-
-	void print(Thread& th, std::string& out, int depth = 0) const;
-	void printShort(Thread& th, std::string& out, int depth = 0) const;
-	void printDebug(Thread& th, std::string& out, int depth = 0) const;
-
-	void print(Thread& th, int depth = 0) const;
-	void printShort(Thread& th, int depth = 0) const;
-	void printDebug(Thread& th, int depth = 0) const;
-
-	bool isObject() const { return o; }
-	bool isReal() const { return !o; }
-	bool isZero() const { return !o && f == 0.; }
-	
-	bool isTrue() const;
-	bool isFalse() const;
-
-	bool isRef() const;
-	bool isZRef() const;
-	bool isPlug() const;
-	bool isZPlug() const;
-	bool isString() const;
-	bool isArray() const;
-	
-	bool isFun() const;
-	bool isPrim() const;
-	bool isFunOrPrim() const;
-	
-	bool isSet() const;
-	bool isTable() const;
-	bool isGTable() const;
-	bool isForm() const;
-	bool isGForm() const;
-	bool isList() const;
-	bool isVList() const;
-	bool isZList() const;
-	bool isEachOp() const;
-
-	bool isZIn() const;
-	
-	bool Identical(Arg v) const;
-	bool Identical(const Object* o) const;
-	bool Equals(Thread& th, Arg v);
-
-	// math
-	V unaryOp(Thread& th,UnaryOp* op) const;
-	V binaryOp(Thread& th,BinaryOp* op, Arg _b) const;
-	
-	V binaryOpWithReal(Thread& th, BinaryOp* op, Z _a) const;
-	V binaryOpWithVList(Thread& th,BinaryOp* op, List* _a) const;
-	V binaryOpWithZList(Thread& th,BinaryOp* op, List* _a) const;
-};
-
-inline V BinaryOp::stringOp(P<String> const& a, P<String> const& b) { throw errUndefinedOperation; }
-
-typedef void (*PrimFun)(Thread& th, Prim*);
-
-enum {
-	flag_NoEachOps = 1
-};
-
-class Object : public RCObj
-{
-public:
-	uint8_t scratch;
-	uint8_t elemType;
-	uint8_t finite;
-	uint8_t flags;
-public:
-
-	Object();
-	virtual ~Object();
-		
-	virtual int Compare(Thread& th, Arg b)
-	{
-		if (!b.o) return 1;
-		
-		Object* bb = b.o();
-		int result = strcmp(TypeName(), bb->TypeName());
-		if (result) return result;
-		else if ((uintptr_t)this < (uintptr_t)bb) return -1;
-		else if ((uintptr_t)this > (uintptr_t)bb) return 1;
-		else return 0;
-	}
-
-	bool NoEachOps() const { return flags & flag_NoEachOps; }
-	void SetNoEachOps() { flags |= flag_NoEachOps; }
-	
-	virtual bool isFinite() const { return finite; }
-	void setFinite(bool b) { finite = b; }
-		
-	virtual int64_t length(Thread& th) { return 1; }
-	virtual Z atz(int64_t index) { return 0.; }
-	virtual Z wrapAtz(int64_t index) { return 0.; }
-	virtual Z foldAtz(int64_t index) { return 0.; }
-	virtual Z clipAtz(int64_t index) { return 0.; }
-	virtual V at(int64_t index) { return V(this); }
-	virtual V at(Arg index) { return V(this); }
-	virtual V wrapAt(int64_t index) { return V(this); }
-	virtual V foldAt(int64_t index) { return V(this); }
-	virtual V clipAt(int64_t index) { return V(this); }
-
-	virtual bool done() const { return false; }
-	virtual uint16_t takes() const { return 0; }
-	virtual uint16_t leaves() const { return 1; }
-
-	virtual const char* OneLineHelp() const { return NULL; }
-	virtual const char* GetAutoMapMask() const { return NULL; }
-			
-	virtual void apply(Thread& th);
-	virtual bool dot(Thread& th, Arg key, V& ioValue) {
-		V value;
-		if (get(th, key, value)) {
-			ioValue = value.msgSend(th, V(this));
-			return true;
-		} else {
-			return false;
-		}
-	}
-	
-	virtual V comma(Thread& th, Arg key) {
-		return this->mustGet(th, key);
-	}
-	virtual V msgSend(Thread& th, Arg receiver) { return V(this); }
-
-	virtual V deref() const { return V(const_cast<O>(this)); }
-	virtual Z derefz() const;
-	virtual Z asFloat() const { return 0.; }
-	
-	virtual V mustGet(Thread& th, Arg key) const { throw errNotFound; }
-	virtual bool get(Thread& th, Arg key, V& value) const { return false; }
-
-	virtual V chase(Thread& th, int64_t n) { return this; }
-	
-	virtual void print(Thread& th, std::string& out, int depth = 0);
-	virtual void printDebug(Thread& th, std::string& out, int depth = 0);
-	virtual void printShort(Thread& th, std::string& out, int depth = 0) { print(th, out, depth); }
-	
-	void print(Thread& th, int depth = 0);
-	void printDebug(Thread& th, int depth = 0);
-	void printShort(Thread& th, int depth = 0);
-	
-	virtual bool isTrue() { return true; }
-	bool isFalse() { return !isTrue(); }
-	
-	virtual bool isRef() const { return false; }
-	virtual bool isZRef() const { return false; }
-	virtual bool isPlug() const { return false; }
-	virtual bool isZPlug() const { return false; }
-	virtual bool isString() const { return false; }
-	virtual bool isArray() const { return false; }
-	virtual bool isZIn() const { return false; }
-	virtual bool isFun() const { return false; }
-	virtual bool isPrim() const { return false; }
-	virtual bool isFunOrPrim() const { return false; }
-	virtual bool isSet() const { return false; }
-	virtual bool isTableMap() const { return false; }
-	virtual bool isTable() const { return false; }
-	virtual bool isGTable() const { return false; }
-	virtual bool isForm() const { return false; }
-	virtual bool isGForm() const { return false; }
-	virtual bool isList() const { return false; }
-	virtual bool isVList() const { return false; }
-	virtual bool isZList() const { return false; }
-	virtual bool isEachOp() const { return false; }
-	
-	virtual int Hash() const { return (int)::Hash64((uintptr_t)this); }
-	virtual bool Identical(const Object* that) const { return this == that; }
-	virtual bool Equals(Thread& th, Arg v) 
-	{ 
-		return v.Identical(this); 
-	}
-	
-	// math
-	virtual V unaryOp(Thread& th, UnaryOp* op) { wrongType("unaryOp", "Real, or List", this); return V(); }
-	virtual V binaryOp(Thread& th, BinaryOp* op, Arg _b) { wrongType("binaryOp", "Real, or List", this); return V(); }
-	
-	virtual V binaryOpWithReal(Thread& th, BinaryOp* op, Z _a) { wrongType("binaryOpWithReal", "Real, or List", this); return V(); }
-	virtual V binaryOpWithVList(Thread& th, BinaryOp* op, List* _a) { wrongType("binaryOpWithVList", "Real, or List", this); return V(); }
-	virtual V binaryOpWithZList(Thread& th, BinaryOp* op, List* _a) { wrongType("binaryOpWithZList", "Real, or List", this); return V(); }
-};
-
-inline double V::asFloat() const { return o ? o->asFloat()  : f; }
-inline int64_t V::asInt() const { return o ? (int64_t)o->asFloat() : (int64_t)floor(f + .5); }
-
-inline bool V::isFinite() const { return o ? o->isFinite() : false; }
-inline bool V::done() const { return o ? o->done() : false; }
-inline uint16_t V::takes() const { return o ? o->takes() : 0; }
-inline uint16_t V::leaves() const { return o ? o->leaves() : 1; }
-
-inline void V::SetNoEachOps() { if (o) o->SetNoEachOps(); }
-
-inline int64_t V::length(Thread& th) { return !o ? 1 : o->length(th); }
-inline Z V::atz(int64_t index) { return !o ? f : o->atz(index); }
-inline Z V::wrapAtz(int64_t index) { return !o ? f : o->wrapAtz(index); }
-inline Z V::foldAtz(int64_t index) { return !o ? f : o->foldAtz(index); }
-inline Z V::clipAtz(int64_t index) { return !o ? f : o->clipAtz(index); }
-inline V V::at(int64_t index) { return !o ? *this : o->at(index); }
-inline V V::wrapAt(int64_t index) { return !o ? *this : o->wrapAt(index); }
-inline V V::foldAt(int64_t index) { return !o ? *this : o->foldAt(index); }
-inline V V::clipAt(int64_t index) { return !o ? *this : o->clipAt(index); }
-inline V V::comma(Thread& th, Arg key) { if (!o) wrongType("comma : v", "Object", *this); return o->comma(th, key); }
-inline bool V::dot(Thread& th, Arg key, V& ioValue)
-{
-	if (!o) return false;
-	return o->dot(th, key, ioValue);
-}
-
-inline const char* V::TypeName() const { return !o ? "Real" : o->TypeName(); }
-inline const char* V::OneLineHelp() const { return !o ? NULL : o->OneLineHelp(); }
-inline const char* V::GetAutoMapMask() const { return !o ? NULL : o->GetAutoMapMask(); }
-
-inline bool V::isTrue() const { return !o ? !(f == 0.) : o->isTrue(); }
-inline bool V::isFalse() const { return !isTrue(); }
-
-inline bool V::isRef() const { return o && o->isRef(); }
-inline bool V::isZRef() const { return o && o->isZRef(); }
-inline bool V::isPlug() const { return o && o->isPlug(); }
-inline bool V::isZPlug() const { return o && o->isZPlug(); }
-inline bool V::isString() const { return o && o->isString(); }
-inline bool V::isArray() const { return o && o->isArray(); }
-
-inline bool V::isFun() const { return o && o->isFun(); }
-inline bool V::isPrim() const { return o && o->isPrim(); }
-inline bool V::isFunOrPrim() const { return o && o->isFunOrPrim(); }
-
-inline bool V::isSet() const { return o && o->isSet(); }
-inline bool V::isTable() const { return o && o->isTable(); }
-inline bool V::isGTable() const { return o && o->isGTable(); }
-inline bool V::isForm() const { return o && o->isForm(); }
-inline bool V::isGForm() const { return o && o->isGForm(); }
-inline bool V::isList() const { return o && o->isList(); }
-inline bool V::isVList() const { return o && o->isVList(); }
-inline bool V::isZList() const { return o && o->isZList(); }
-inline bool V::isEachOp() const { return o && o->isEachOp(); }
-
-inline bool V::isZIn() const { return !o || o->isZIn(); }
-
-inline V V::chase(Thread& th, int64_t n) { return !o ? f : o->chase(th, n); }
-
-
-inline bool V::Identical(Arg v) const
-{
-    if (o) {
-        if (!v.o) return false;
-        return o->Identical(v.o());
-    } else {
-        if (v.o) return false;
-        return f == v.f;
-    }
-}
-
-inline bool V::Identical(const Object* _o) const
-{ 
-	if (!o) return false;
-	return o->Identical(_o);
-}
-
-inline bool V::Equals(Thread& th, Arg v)
-{
-	if (!o && !v.o) return f == v.f;
-	return !o ? v.o->Equals(th, *this) : o->Equals(th, v);
-}
-
-inline bool Equals(Thread& th, Arg a, Arg b)
-{
-	if (a.isReal()) {
-		if (b.isReal()) return a.f == b.f;
-		else return false;
-	} else {
-		return a.o->Equals(th, b);
-	}
-}
-
-inline int Compare(Thread& th, Arg a, Arg b)
-{
-	if (a.isReal()) {
-		if (b.isReal()) {
-			if (a.f < b.f) return -1;
-			if (a.f > b.f) return 1;
-			if (a.f == b.f) return 0;
-			// not a number. what to do?
-			return -2;
-		} else return -1;
-	} else {
-		return a.o->Compare(th, b);
-	}
-}
-
-class String : public Object
-{
-public:	
-	char* s;
-	int32_t hash;
-	String* nextSymbol;
-		
-	String(const char* str, int32_t inHash, String* nextSymbol = nullptr) : Object(), nextSymbol(nextSymbol) { s = strdup(str); hash = inHash; }
-	String(const char* str) : Object(), nextSymbol(nullptr) { s = strdup(str); hash = ::Hash(s); }
-	String(char* str, const char* dummy) 
-        : Object(), nextSymbol(nullptr) { s = str; hash = ::Hash(s); }
-
-	virtual ~String() { free(s); }
-	
-	virtual const char* TypeName() const override { return "String"; }
-    const char* cstr() const { return s; }
-
-	virtual int64_t length(Thread& th) override { return strlen(s); }
-    
-	using Object::print;
-	using Object::printDebug;
-	virtual void print(Thread& th, std::string& out, int depth) override;
-	virtual void printDebug(Thread& th, std::string& out, int depth) override;
-	
-	virtual bool isString() const override { return true; }
-	virtual bool Equals(Thread& th, Arg v) override 
-	{
-		if (v.Identical(this)) return true;
-		return v.isString() && ((String*)v.o() == this || (hash == ((String*)v.o())->hash && strcmp(s, ((String*)v.o())->s)==0)); 
-	}
-
-	virtual int Compare(Thread& th, Arg b) override
-	{
-		if (b.isString()) { return strcmp(s, ((String*)b.o())->s); }
-		return Object::Compare(th, b);
-	}
-
-	virtual int Hash() const override { return hash; }
-
-	virtual V binaryOp(Thread& th, BinaryOp* op, Arg _b) override
-	{
-		if (_b.isString()) {
-			return op->stringOp(this, (String*)_b.o());
-		} else {
-			wrongType("binaryOp with string.", "String", _b);
-			return 0.; // never gets here. keep compiler happy.
-		}
-	}
-
-};
+//==============================================================================
+// Ref - Mutable reference to a value
+//==============================================================================
 
 class Ref : public Object
 {
 	Z z;
 	O o;
-    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;
 public:
 
 	Ref(V inV) : z(inV.f), o(inV.o()) { if (o) o->retain(); }
@@ -566,7 +102,7 @@ public:
 	{
 		return deref().binaryOp(th, op, _b);
 	}
-	
+
 	virtual V binaryOpWithReal(Thread& th, BinaryOp* op, Z _a) override
 	{
 		return deref().binaryOpWithReal(th, op, _a);
@@ -581,6 +117,10 @@ public:
 	}
 };
 
+//==============================================================================
+// ZRef - Mutable reference to a Z (sample) value
+//==============================================================================
+
 class ZRef : public Object
 {
 public:
@@ -594,7 +134,7 @@ public:
 
 	virtual bool isZRef() const override { return true; }
 
-	virtual bool Equals(Thread& th, Arg that) override 
+	virtual bool Equals(Thread& th, Arg that) override
 	{
 		if (!that.isZRef()) return false;
 		return z == ((ZRef*)that.o())->z;
@@ -617,7 +157,7 @@ public:
 	{
 		return deref().binaryOp(th, op, _b);
 	}
-	
+
 	virtual V binaryOpWithReal(Thread& th, BinaryOp* op, Z _a) override
 	{
 		return deref().binaryOpWithReal(th, op, _a);
@@ -632,6 +172,9 @@ public:
 	}
 };
 
+//==============================================================================
+// FunDef - Function definition (compiled code + metadata)
+//==============================================================================
 
 class FunDef : public Object
 {
@@ -650,8 +193,12 @@ public:
 	virtual const char* TypeName() const override { return "FunDef"; }
 	virtual const char* OneLineHelp() const override { return mHelp() ? mHelp->cstr() : nullptr; }
 	P<GForm> Workspace() const { return mWorkspace; }
-	
+
 };
+
+//==============================================================================
+// Fun - Function instance (closure)
+//==============================================================================
 
 class Fun : public Object
 {
@@ -662,7 +209,7 @@ public:
 
 	Fun(Thread& th, FunDef* def);
 	virtual ~Fun();
-	
+
 	virtual const char* TypeName() const override { return "Fun"; }
 	virtual const char* OneLineHelp() const override { return mDef->OneLineHelp(); }
 	P<GForm>& Workspace() { return mWorkspace; }
@@ -670,19 +217,23 @@ public:
 	uint16_t NumLocals() const { return mDef->mNumLocals; }
 	uint16_t NumVars() const { return mDef->mNumVars; }
 	uint16_t Leaves() const { return mDef->mLeaves; }
-	
+
 	virtual uint16_t takes() const override { return NumArgs(); }
 	virtual uint16_t leaves() const override { return Leaves(); }
 
 	virtual bool isFun() const override { return true; }
 	virtual bool isFunOrPrim() const override { return true; }
 	virtual bool isFinite() const override { return false; }
-		
+
 	virtual V msgSend(Thread& th, Arg receiver) override;
 	virtual void apply(Thread& th) override;
-	void run(Thread& th);	
+	void run(Thread& th);
 	void runREPL(Thread& th);
 };
+
+//==============================================================================
+// Prim - Primitive (built-in) function
+//==============================================================================
 
 class Prim : public Object
 {
@@ -700,17 +251,17 @@ public:
 	virtual const char* TypeName() const override { return "Prim"; }
 	virtual const char* OneLineHelp() const override { return mHelp; }
 	virtual const char* GetAutoMapMask() const override;
-	
+
 	virtual bool isPrim() const override { return true; }
 	virtual bool isFunOrPrim() const override { return true; }
-	
+
 	virtual V msgSend(Thread& th, Arg receiver) override;
 	virtual void apply(Thread& th) override;
 	virtual void apply_n(Thread& th, size_t n);
 
 	uint16_t Takes() const { return mTakes; }
 	uint16_t Leaves() const { return mLeaves; }
-	
+
 	virtual uint16_t takes() const override { return Takes(); }
 	virtual uint16_t leaves() const override { return Leaves(); }
 
@@ -720,6 +271,9 @@ public:
 	virtual void printDebug(Thread& th, std::string& out, int depth) override;
 };
 
+//==============================================================================
+// EachOp - Each operation wrapper
+//==============================================================================
 
 class EachOp : public Object
 {
@@ -729,7 +283,7 @@ public:
 
 	EachOp(Arg inV, int inMask)
 		: v(inV), mask(inMask) {}
-	
+
 
 	virtual const char* TypeName() const override { return "EachOp"; }
 
@@ -739,7 +293,9 @@ public:
 	virtual void print(Thread& th, std::string& out, int depth) override;
 };
 
-
+//==============================================================================
+// TreeNode - Immutable tree node for persistent data structures
+//==============================================================================
 
 class TreeNode : public Object
 {
@@ -750,9 +306,9 @@ public:
     int64_t mSerialNumber;
 	volatile std::atomic<TreeNode*> mLeft;
 	volatile std::atomic<TreeNode*> mRight;
-	
+
 	TreeNode(Arg inKey, int64_t inKeyHash, Arg inValue, int64_t inSerialNumber,
-        TreeNode* inLeft, TreeNode* inRight) 
+        TreeNode* inLeft, TreeNode* inRight)
         : mKey(inKey), mValue(inValue), mHash(inKeyHash), mSerialNumber(inSerialNumber)
     {
 		if (inLeft) inLeft->retain();
@@ -760,8 +316,8 @@ public:
         mLeft.store(inLeft);
         mRight.store(inRight);
     }
-    
-    ~TreeNode() 
+
+    ~TreeNode()
     {
         auto left = mLeft.load();
         auto right = mRight.load();
@@ -770,49 +326,56 @@ public:
     }
 
 	virtual const char* TypeName() const override { return "TreeNode"; }
-    
+
     TreeNode* putPure(Arg inKey, int64_t inKeyHash, Arg inValue);
-	
+
 	void getAll(std::vector<P<TreeNode> >& vec);
 };
 
+//==============================================================================
+// GTable - Global (growable) table with atomic tree
+//==============================================================================
 
 class GTable : public Object
 {
-    volatile std::atomic<TreeNode*> mTree;  
+    volatile std::atomic<TreeNode*> mTree;
 	GTable(const GTable& that) {}
 public:
-	
-	GTable(TreeNode* inTree = nullptr) { 
-        if (inTree) inTree->retain(); 
+
+	GTable(TreeNode* inTree = nullptr) {
+        if (inTree) inTree->retain();
         mTree.store(inTree);
     }
-    
-	virtual ~GTable() { 
+
+	virtual ~GTable() {
         auto tree = mTree.load();
-        if (tree) tree->release(); 
+        if (tree) tree->release();
     }
-	
+
 	virtual const char* TypeName() const override { return "GTable"; }
-    
+
 	virtual bool isGTable() const override { return true; }
 	virtual bool Equals(Thread& th, Arg v) override;
-		
+
 	virtual bool get(Thread& th, Arg key, V& value) const override;
     bool getInner(Arg inKey, V& outValue) const;
 	virtual V mustGet(Thread& th, Arg key) const override;
-    
+
 	bool putImpure(Arg key, Arg value);
 	GTable* putPure(Arg key, int64_t keyHash, Arg value);
-		
+
 	using Object::print;
 	virtual void print(Thread& th, std::string& out, int depth) override;
 	virtual void printSomethingIWant(Thread& th, std::string& out, int depth);
-    
+
     const TreeNode* tree() { return mTree.load(); }
-	
+
 	std::vector<P<TreeNode> > sorted() const;
 };
+
+//==============================================================================
+// GForm - Global form (prototype chain with GTable)
+//==============================================================================
 
 class GForm : public Object
 {
@@ -822,36 +385,39 @@ public:
 
 	GForm(P<GTable> const& inTable, P<GForm> const& inNext = nullptr);
 	GForm(P<GForm> const& inNext = nullptr);
-	
+
 	virtual const char* TypeName() const override { return "GForm"; }
-	
+
 	virtual bool isGForm() const override { return true; }
-	virtual bool Equals(Thread& th, Arg v) override 
+	virtual bool Equals(Thread& th, Arg v) override
 	{
 		if (!v.isGForm()) return false;
 		GForm* that = (GForm*)v.o();
-		
+
         // fail cheaply first
         if (mNextForm() == 0 && that->mNextForm() != 0) return false;
 		if (mNextForm() != 0 && that->mNextForm() == 0) return false;
 
 		if (!mTable->Equals(th, that->mTable())) return false;
 		if (mNextForm() == 0 && that->mNextForm() == 0) return true;
-		
+
 		return mNextForm->Equals(th, that->mNextForm());
 	}
-	
+
 	virtual bool get(Thread& th, Arg key, V& value) const override;
-	
+
 	GForm* putImpure(Arg inKey, Arg inValue);
     GForm* putPure(Arg inKey, Arg inValue);
-	
+
 	virtual V mustGet(Thread& th, Arg key) const override;
 
 	using Object::print;
 	virtual void print(Thread& th, std::string& out, int depth) override;
 };
 
+//==============================================================================
+// TableMap - Hash map for table keys
+//==============================================================================
 
 class TableMap : public Object
 {
@@ -860,7 +426,7 @@ public:
 	size_t mMask;
 	size_t* mIndices;
 	V* mKeys;
-	
+
 	TableMap(size_t inSize);
 	TableMap(Arg inKey); // one item table map
 	~TableMap();
@@ -876,20 +442,24 @@ public:
 	virtual void print(Thread& th, std::string& out, int depth) override;
 };
 
+//==============================================================================
+// Table - Immutable table with hash map
+//==============================================================================
+
 class Table : public Object
 {
 public:
 	P<TableMap> mMap;
 	V* mValues;
-	
+
 	Table(P<TableMap> const& inMap);
 	~Table();
 
 	virtual bool Equals(Thread& th, Arg v) override;
-	
+
 	bool getWithHash(Thread& th, Arg key, int64_t hash, V& value) const;
     void put(size_t inIndex, Arg inValue);
-	
+
 	virtual const char* TypeName() const override { return "Table"; }
 	virtual bool isTable() const override { return true; }
 
@@ -899,6 +469,10 @@ public:
 	P<Table> chaseTable(Thread& th, int64_t n);
 };
 
+//==============================================================================
+// Form - Immutable form (prototype chain)
+//==============================================================================
+
 class Form : public Object
 {
 public:
@@ -906,44 +480,42 @@ public:
 	P<Form> mNextForm;
 
 	Form(P<Table> const& inTable, P<Form> const& inNext = nullptr);
-	
+
 	virtual const char* TypeName() const override { return "Form"; }
-	
+
 	virtual bool isForm() const override { return true; }
 	virtual bool Equals(Thread& th, Arg v) override
 	{
 		if (v.Identical(this)) return true;
 		if (!v.isForm()) return false;
 		Form* that = (Form*)v.o();
-		
+
         // fail cheaply first
         if (mNextForm() == 0 && that->mNextForm() != 0) return false;
 		if (mNextForm() != 0 && that->mNextForm() == 0) return false;
 
 		if (!mTable->Equals(th, that->mTable())) return false;
 		if (mNextForm() == 0 && that->mNextForm() == 0) return true;
-		
+
 		return mNextForm->Equals(th, that->mNextForm());
 	}
-	
+
 	virtual bool get(Thread& th, Arg key, V& value) const override;
-	
+
     void put(int64_t inIndex, Arg inValue);
-	
+
 	virtual V mustGet(Thread& th, Arg key) const override;
 
 	virtual V chase(Thread& th, int64_t n) override { return chaseForm(th, n); }
 	P<Form> chaseForm(Thread& th, int64_t n);
-	
+
 	using Object::print;
 	virtual void print(Thread& th, std::string& out, int depth) override;
 };
 
-
-enum {
-	itemTypeV,
-	itemTypeZ
-};
+//==============================================================================
+// In, VIn, ZIn, BothIn - Input stream abstractions
+//==============================================================================
 
 struct In
 {
@@ -952,13 +524,13 @@ struct In
 	V mConstant;
 	bool mIsConstant;
 	bool mDone = false;
-	
+
 	In();
 	In(V inValue);
 
 	bool isConstant() const { return mIsConstant; }
 	bool isZero() const { return isConstant() && mConstant.isZero(); }
-	
+
 	void advance(int inNum);
 	bool done() const { return mDone; }
 };
@@ -1010,6 +582,9 @@ struct BothIn : In
 	bool onei(Thread& th, int64_t& i);
 };
 
+//==============================================================================
+// Gen - Generator base class
+//==============================================================================
 
 class Gen : public Object
 {
@@ -1022,28 +597,31 @@ public:
 
 	Gen(Thread& th, int inItemType, bool finite = false);
 	virtual ~Gen();
-	
+
 	void setOut(List* inOut) { if (!mOut) mOut = inOut; }
 
 	virtual void pull(Thread& th) = 0;
-	
+
 	void setDone();
 	void end();
 	bool done() const { return mDone; }
-	
+
 	void produce(int shrinkBy);
 
 	int blockSize() const { return mBlockSize; }
 };
 
+//==============================================================================
+// Plug - Mutable input plug for VIn
+//==============================================================================
 
 class Plug : public Object
 {
 	VIn in;
-    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;
 	int mChangeCount;
 public:
-	
+
 	Plug(Arg inV) : in(inV), mChangeCount(0) {}
 
 	virtual const char* TypeName() const override { return "Plug"; }
@@ -1055,19 +633,23 @@ public:
 		if (that.Identical(this)) return true;
 		return false;
 	}
-	
+
 	void setPlug(Arg inV);
 	void setPlug(const VIn& inVIn, int inChangeCount);
 	void getPlug(VIn& outVIn, int& outChangeCount);
 };
 
+//==============================================================================
+// ZPlug - Mutable input plug for ZIn
+//==============================================================================
+
 class ZPlug : public Object
 {
 	ZIn in;
-    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;
 	int mChangeCount;
 public:
-	
+
 	ZPlug(Arg inV) : in(inV), mChangeCount(0) {}
 
 	virtual const char* TypeName() const override { return "ZPlug"; }
@@ -1079,12 +661,15 @@ public:
 		if (that.Identical(this)) return true;
 		return false;
 	}
-	
+
 	void setPlug(Arg inV);
 	void setPlug(const ZIn& inZIn, int inChangeCount);
 	void getPlug(ZIn& outZIn, int& outChangeCount);
 };
 
+//==============================================================================
+// Array - Dynamic array of V or Z values
+//==============================================================================
 
 class Array : public Object
 {
@@ -1103,7 +688,7 @@ public:
 		elemType = inItemType;
 		alloc(std::max(int64_t(1), inCap));
 	}
-	
+
 	virtual ~Array();
 
 	virtual const char* TypeName() const override { return "Array"; }
@@ -1111,24 +696,24 @@ public:
 
 	bool isV() const { return elemType == itemTypeV; }
 	bool isZ() const { return elemType == itemTypeZ; }
-    
+
     V* v() { return vv; }
     Z* z() { return zz; }
-	
+
 	size_t elemSize() { return isV() ? sizeof(V) : sizeof(Z); }
 	void alloc(int64_t inCap);
 
 	int64_t size() const { return mSize; }
     void setSize(size_t inSize) { mSize = inSize; }
     void addSize(size_t inDelta) { mSize += inDelta; }
-	
+
 	void add(Arg value);
 	void put(int64_t i, Arg inItem);
 	void addAll(Array* a);
 
 	void addz(Z value);
 	void putz(int64_t i, Z inItem);
-	
+
 	using Object::at;
 	V _at(int64_t i); // no bounds check
 	Z _atz(int64_t i); // no bounds check
@@ -1167,26 +752,30 @@ public:
 			return Object::Compare(th, b);
 		}
 	}
-	
+
 };
 
 #define ASSERT_PACKED  assert(isPacked());
+
+//==============================================================================
+// List - Lazy list with generator support
+//==============================================================================
 
 class List : public Object
 {
 	P<List> mNext;
 public:
-    mutable SpinLockType mSpinLock = SPINLOCK_INIT;   
+    mutable SpinLockType mSpinLock = SPINLOCK_INIT;
 	P<Gen> mGen;
 	P<Array> mArray;
 
 	List(int inItemType);
 	List(int inItemType, int64_t inCap);
-	
+
 	List(P<Gen> const& inGen);
-		
+
 	List(P<Array> const& inArray);
-	
+
 	List(P<Array> const& inArray, P<List> const& inNext);
 
 	virtual ~List();
@@ -1195,7 +784,7 @@ public:
 	List* nextp() const { return mNext(); }
 
 	virtual const char* TypeName() const override { return  isV() ? "VList" : "ZList"; }
-	
+
 	virtual bool isList() const override { return true; }
 	virtual bool isVList() const override { return elemType == itemTypeV; }
 	virtual bool isZList() const override { return elemType == itemTypeZ; }
@@ -1209,9 +798,9 @@ public:
 	bool isV() const { return elemType == itemTypeV; }
 	bool isZ() const { return elemType == itemTypeZ; }
 	bool isPacked() const { return !mNext && !mGen; }
-	
+
 	virtual int64_t length(Thread& th) override;
-		
+
 	V* fulfill(int n);
 	V* fulfill_link(int n, P<List> const& next);
 	V* fulfill(P<Array> const& inArray);
@@ -1220,25 +809,25 @@ public:
 	Z* fulfillz(P<Array> const& inArray);
 	void link(Thread& th, List* inList);
 	void end();
-	
+
 	List* pack(Thread& th);
 	List* packz(Thread& th);
 	List* pack(Thread& th, int limit);
 	List* packSome(Thread& th, int64_t& limit);
 	void forceAll(Thread& th);
 	void force(Thread& th);
-	
+
 	int64_t fillz(Thread& th, int64_t n, Z* z);
 
 	virtual V comma(Thread& th, Arg key) override;
 	virtual bool dot(Thread& th, Arg key, V& ioValue) override;
-	
+
 	virtual bool Equals(Thread& th, Arg v) override;
 
 	// these assume the list is packed
 	void put(int64_t index, Arg value) { ASSERT_PACKED mArray->put(index, value); }
 	void add(Arg value) { ASSERT_PACKED mArray->add(value); }
-	
+
 	void putz(int64_t index, Z value) { ASSERT_PACKED mArray->put(index, value); }
 	void addz(Z value) { ASSERT_PACKED mArray->addz(value); }
 
@@ -1262,19 +851,19 @@ public:
 	virtual V binaryOp(Thread& th, BinaryOp* op, Arg _b) override
 	{
 		if (isVList())
-			return _b.binaryOpWithVList(th, op, this); 
+			return _b.binaryOpWithVList(th, op, this);
 		else
-			return _b.binaryOpWithZList(th, op, this); 
+			return _b.binaryOpWithZList(th, op, this);
 	}
-	
+
 	virtual V binaryOpWithReal(Thread& th, BinaryOp* op, Z _a) override;
 	virtual V binaryOpWithVList(Thread& th, BinaryOp* op, List* _a) override;
 	virtual V binaryOpWithZList(Thread& th, BinaryOp* op, List* _a) override;
-	
+
 	virtual int Compare(Thread& th, Arg that) override
 	{
 		if (that.isList() && isFinite() && that.isFinite() && ItemType() == ((List*)that.o())->ItemType()) {
-			
+
 			if (isV()) {
 				VIn aa(this);
 				VIn bb(that);
@@ -1308,10 +897,14 @@ public:
 			return Object::Compare(th, that);
 		}
 	}
-	
+
 };
 
 void dumpList(List const* list);
+
+//==============================================================================
+// Opcode - VM instruction
+//==============================================================================
 
 struct Opcode
 {
@@ -1321,6 +914,10 @@ struct Opcode
 	int op;
 	V v;
 };
+
+//==============================================================================
+// Code - Compiled bytecode
+//==============================================================================
 
 class Code : public Object
 {
@@ -1336,62 +933,25 @@ public:
 	virtual bool isCode() const { return true; }
 
 	void shrinkToFit();
-	
+
 	int64_t size() { return ops.size(); }
-	
+
 	Opcode* getOps() { return &ops[0]; }
-	
+
 	void addAll(P<Code> const& that);
 
 	void add(int op, Arg v);
 	void add(int op, double f);
-		
+
 	using Object::print;
 	virtual void print(Thread& th, std::string& out, int depth) override;
-	
+
 	void decompile(Thread& th, std::string& out);
 };
 
-
-
-
-inline bool mostFinite(Arg a, Arg b)
-{
-	return a.isFinite() || b.isFinite(); 
-}
-
-inline bool mostFinite(Arg a, Arg b, Arg c)
-{
-	return a.isFinite() || b.isFinite() || c.isFinite(); 
-}
-
-inline bool mostFinite(Arg a, Arg b, Arg c, Arg d)
-{
-	return a.isFinite() || b.isFinite() || c.isFinite() || d.isFinite(); 
-}
-
-inline bool mostFinite(Arg a, Arg b, Arg c, Arg d, Arg e)
-{
-	return a.isFinite() || b.isFinite() || c.isFinite() || d.isFinite() || e.isFinite(); 
-}
-
-inline bool mostFinite(Arg a, Arg b, Arg c, Arg d, Arg e, Arg f, Arg g, Arg h)
-{
-	return a.isFinite() || b.isFinite() || c.isFinite() || d.isFinite() || e.isFinite() || f.isFinite() || g.isFinite() || h.isFinite();
-}
-
-inline bool leastFinite(Arg a, Arg b)
-{
-	return a.isFinite() && b.isFinite(); 
-}
-
-P<Form> asParent(Thread& th, V& v);
-
-P<Form> consForm(P<Table> const& a, P<Form> const& d);
-P<GForm> consForm(P<GTable> const& a, P<GForm> const& d);
-
-void zprintf(std::string& out, const char* fmt, ...);
-
+//==============================================================================
+// Inline implementations that need complete Array type
+//==============================================================================
 
 inline V Array::_at(int64_t i)
 {
@@ -1463,11 +1023,50 @@ inline Z Array::foldAtz(int64_t i)
 	return _atz(i);
 }
 
+//==============================================================================
+// Utility functions
+//==============================================================================
 
-const int kMaxArgs = 16;
+inline bool mostFinite(Arg a, Arg b)
+{
+	return a.isFinite() || b.isFinite();
+}
 
+inline bool mostFinite(Arg a, Arg b, Arg c)
+{
+	return a.isFinite() || b.isFinite() || c.isFinite();
+}
 
-// SpinLocker is defined in PlatformLock.hpp
+inline bool mostFinite(Arg a, Arg b, Arg c, Arg d)
+{
+	return a.isFinite() || b.isFinite() || c.isFinite() || d.isFinite();
+}
+
+inline bool mostFinite(Arg a, Arg b, Arg c, Arg d, Arg e)
+{
+	return a.isFinite() || b.isFinite() || c.isFinite() || d.isFinite() || e.isFinite();
+}
+
+inline bool mostFinite(Arg a, Arg b, Arg c, Arg d, Arg e, Arg f, Arg g, Arg h)
+{
+	return a.isFinite() || b.isFinite() || c.isFinite() || d.isFinite() || e.isFinite() || f.isFinite() || g.isFinite() || h.isFinite();
+}
+
+inline bool leastFinite(Arg a, Arg b)
+{
+	return a.isFinite() && b.isFinite();
+}
+
+P<Form> asParent(Thread& th, V& v);
+
+P<Form> consForm(P<Table> const& a, P<Form> const& d);
+P<GForm> consForm(P<GTable> const& a, P<GForm> const& d);
+
+void zprintf(std::string& out, const char* fmt, ...);
+
+//==============================================================================
+// ArgInfo - Argument information for each operations
+//==============================================================================
 
 struct ArgInfo
 {
@@ -1480,11 +1079,11 @@ struct ArgInfo
 
 List* handleEachOps(Thread& th, int numArgs, Arg fun);
 
-///////////
-
 P<Form> linearizeInheritance(Thread& th, size_t numArgs, V* args);
 
-///////////
+//==============================================================================
+// RAII helper classes
+//==============================================================================
 
 #if defined(__APPLE__)
 #include <CoreFoundation/CFBase.h>
@@ -1534,6 +1133,11 @@ public:
 	~ScopeLog() { post("} %s\n", label); }
 };
 
-///////////
+//==============================================================================
+// Include inline implementations that need complete types
+// This MUST be last, after all class definitions
+//==============================================================================
 
-#endif
+#include "ObjectInlines.hpp"
+
+#endif // __Object_h__

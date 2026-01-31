@@ -14,26 +14,16 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef __Value_h__
-#define __Value_h__
+#ifndef SAPF_VALUE_HPP
+#define SAPF_VALUE_HPP
 
 #include "Forward.hpp"
-#include "ErrorCodes.hpp"
 #include <string>
 
-// Use C linkage for post() to be compatible with Max SDK
-extern "C" void post(const char* fmt, ...);
+//==============================================================================
+// UnaryOp - Base class for unary operations
+//==============================================================================
 
-// NaN constant
-const double NaN = NAN;
-
-// Error functions
-[[noreturn]] void wrongType(const char* msg, const char* expected, Arg got);
-[[noreturn]] void syntaxError(const char* msg);
-[[noreturn]] void indefiniteOp(const char* msg1, const char* msg2);
-[[noreturn]] void notFound(Arg key);
-
-// UnaryOp - base class for unary operations
 struct UnaryOp
 {
     virtual ~UnaryOp() {}
@@ -43,7 +33,10 @@ struct UnaryOp
     virtual void loopz(int n, const Z *a, int astride, Z *out) = 0;
 };
 
-// BinaryOp - base class for binary operations
+//==============================================================================
+// BinaryOp - Base class for binary operations
+//==============================================================================
+
 struct BinaryOp
 {
     virtual ~BinaryOp() {}
@@ -76,8 +69,19 @@ struct BinaryOpLink : public BinaryOp
     virtual V makeZList(Thread& th, Arg a, Arg b);
 };
 
-// V - a tagged value. Either a number or a pointer to an object.
+// Default implementation
+inline V BinaryOp::stringOp(P<String> const& a, P<String> const& b) { throw errUndefinedOperation; }
+
+//==============================================================================
+// V - Tagged Value
+//
+// A V can hold either:
+// - A pointer to an Object (when o is non-null)
+// - A double value (when o is null, value in f)
+//
 // This is the fundamental value type in SAPF.
+//==============================================================================
+
 class V
 {
 public:
@@ -87,19 +91,26 @@ public:
         int64_t i;
     };
 
-    V() : o(NULL), f(0.) {}
+    // Constructors
+    V() : o(nullptr), f(0.) {}
     V(O _o)  : o(_o), f(0.) {}
-    V(double _f) : o(NULL), f(_f) {}
+    V(double _f) : o(nullptr), f(_f) {}
     template <typename U> V(P<U> const& p) : o(p()), f(0.) {}
 
-    O asObj() const;
-
+    // Setters
     template <typename T>
     void set(P<T> const& p) { o = p(); }
     void set(O _o) { o = _o; }
     void set(double _f) { o = nullptr; f = _f; }
     void set(Arg v) { o = v.o; f = v.f; }
 
+    // Basic type checks (no Object dependency)
+    bool isObject() const { return o; }
+    bool isReal() const { return !o; }
+    bool isZero() const { return !o && f == 0.; }
+
+    // Methods requiring Object - declared here, defined in ObjectInlines.hpp
+    O asObj() const;
     double asFloat() const;
     int64_t asInt() const;
 
@@ -147,10 +158,6 @@ public:
     void printShort(Thread& th, int depth = 0) const;
     void printDebug(Thread& th, int depth = 0) const;
 
-    bool isObject() const { return o; }
-    bool isReal() const { return !o; }
-    bool isZero() const { return !o && f == 0.; }
-
     bool isTrue() const;
     bool isFalse() const;
 
@@ -181,19 +188,13 @@ public:
     bool Identical(const Object* o) const;
     bool Equals(Thread& th, Arg v);
 
-    // math
-    V unaryOp(Thread& th,UnaryOp* op) const;
-    V binaryOp(Thread& th,BinaryOp* op, Arg _b) const;
+    // Math operations
+    V unaryOp(Thread& th, UnaryOp* op) const;
+    V binaryOp(Thread& th, BinaryOp* op, Arg _b) const;
 
     V binaryOpWithReal(Thread& th, BinaryOp* op, Z _a) const;
-    V binaryOpWithVList(Thread& th,BinaryOp* op, List* _a) const;
-    V binaryOpWithZList(Thread& th,BinaryOp* op, List* _a) const;
+    V binaryOpWithVList(Thread& th, BinaryOp* op, List* _a) const;
+    V binaryOpWithZList(Thread& th, BinaryOp* op, List* _a) const;
 };
 
-// Default implementation for BinaryOp::stringOp
-inline V BinaryOp::stringOp(P<String> const& a, P<String> const& b) { throw errUndefinedOperation; }
-
-// Primitive function pointer type
-typedef void (*PrimFun)(Thread& th, Prim*);
-
-#endif // __Value_h__
+#endif // SAPF_VALUE_HPP
