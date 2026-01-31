@@ -29,3 +29,15 @@ add_sapf_unit_test(test_symbol test_symbol.cpp)
 
 # Hash function tests
 add_sapf_unit_test(test_hash test_hash.cpp)
+
+# Parser tests
+add_sapf_unit_test(test_parser test_parser.cpp)
+
+# VM opcode tests
+add_sapf_unit_test(test_vm test_vm.cpp)
+
+# Array/List tests
+add_sapf_unit_test(test_array_list test_array_list.cpp)
+
+# Error handling tests
+add_sapf_unit_test(test_errors test_errors.cpp)

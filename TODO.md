@@ -2,10 +2,10 @@
 
 ## Testing
 
-- [ ] Add parser edge case tests (malformed input, Unicode, deeply nested expressions)
-- [ ] Add VM opcode tests
-- [ ] Add Array/List operation tests
-- [ ] Add error handling path tests
+- [x] Add parser edge case tests (malformed input, deeply nested expressions)
+- [x] Add VM opcode tests (arithmetic, stack manipulation, conditionals)
+- [x] Add Array/List operation tests (construction, indexing, fold/scan)
+- [x] Add error handling path tests (syntax, type, stack errors)
 
 ## Documentation
 

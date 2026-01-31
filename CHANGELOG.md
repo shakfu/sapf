@@ -13,7 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `tests/unit/test_value.cpp` - V class operations, type checking, conversions (35 tests)
   - `tests/unit/test_symbol.cpp` - Symbol interning, thread safety, concurrent access (17 tests)
   - `tests/unit/test_hash.cpp` - Hash() and Hash64() functions, distribution tests (15 tests)
-  - Total: 83 new unit tests alongside 18 existing integration tests
+  - `tests/unit/test_parser.cpp` - Parser edge cases, number/string/array/lambda parsing (40 tests)
+  - `tests/unit/test_vm.cpp` - VM opcodes, arithmetic, stack manipulation, conditionals (60 tests)
+  - `tests/unit/test_array_list.cpp` - Array/List construction, indexing, operations (30 tests)
+  - `tests/unit/test_errors.cpp` - Error handling, syntax errors, type errors (24 tests)
+  - Total: 246 new unit tests alongside 18 existing integration tests (264 total)
 - **Vendored GoogleTest v1.14.0** in `thirdparty/googletest/` for reproducible offline builds
 - **ARCHITECTURE.md** - Comprehensive documentation of the VM execution model, reference counting system, and threading guarantees
 - **REVIEW.md** - Code review with analysis of architecture, modularity, and recommendations
