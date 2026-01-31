@@ -24,6 +24,7 @@
 #include <float.h>
 #include <vector>
 #include <algorithm>
+#include <memory>
 #include "sapf/AccelerateCompat.hpp"
 
 
@@ -38,7 +39,7 @@ class DelayN : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
 
@@ -48,10 +49,10 @@ public:
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~DelayN() { free(buf); }
+
+	~DelayN() = default;
 	
 	virtual const char* TypeName() const override { return "DelayN"; }
     
@@ -115,20 +116,20 @@ class DelayL : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	DelayL(Thread& th, Arg in, Arg delay, Z maxdelay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~DelayL() { free(buf); }
+
+	~DelayL() = default;
 	
 	virtual const char* TypeName() const override { return "DelayL"; }
     
@@ -215,20 +216,20 @@ class DelayC : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	DelayC(Thread& th, Arg in, Arg delay, Z maxdelay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~DelayC() { free(buf); }
+
+	~DelayC() = default;
 	
 	virtual const char* TypeName() const override { return "DelayC"; }
     
@@ -321,11 +322,11 @@ class Flange : public Gen
 	int32_t bufMask;
 	int32_t bufPos;
 	int32_t half;
-    Z fhalf;
-	Z* buf;
+	Z fhalf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	Flange(Thread& th, Arg in, Arg delay, Z maxdelay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
@@ -334,10 +335,10 @@ public:
 		bufSize = NEXTPOWEROFTWO(2 * half);
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~Flange() { free(buf); }
+
+	~Flange() = default;
 	
 	virtual const char* TypeName() const override { return "Flange"; }
     
@@ -390,11 +391,11 @@ class Flangep : public Gen
 	int32_t bufMask;
 	int32_t bufPos;
 	int32_t half;
-    Z fhalf;
-	Z* buf;
+	Z fhalf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	Flangep(Thread& th, Arg in, Arg delay, Z maxdelay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
@@ -403,10 +404,10 @@ public:
 		bufSize = NEXTPOWEROFTWO(2 * half);
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~Flangep() { free(buf); }
+
+	~Flangep() = default;
 	
 	virtual const char* TypeName() const override { return "Flangep"; }
     
@@ -498,20 +499,20 @@ class CombN : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	CombN(Thread& th, Arg in, Arg delay, Z maxdelay, Arg decay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), decay_(decay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay + 1.));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~CombN() { free(buf); }
+
+	~CombN() = default;
 	
 	virtual const char* TypeName() const override { return "CombN"; }
     
@@ -597,20 +598,20 @@ class CombL : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	CombL(Thread& th, Arg in, Arg delay, Z maxdelay, Arg decay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), decay_(decay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~CombL() { free(buf); }
+
+	~CombL() = default;
 	
 	virtual const char* TypeName() const override { return "CombL"; }
     
@@ -725,20 +726,20 @@ class CombC : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	CombC(Thread& th, Arg in, Arg delay, Z maxdelay, Arg decay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), decay_(decay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~CombC() { free(buf); }
+
+	~CombC() = default;
 	
 	virtual const char* TypeName() const override { return "CombC"; }
     
@@ -862,10 +863,10 @@ class LPCombC : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	LPCombC(Thread& th, Arg in, Arg delay, Z maxdelay, Arg decay, Arg lpfreq) : Gen(th, itemTypeZ, false),
 			in_(in), delay_(delay), decay_(decay), lpfreq_(lpfreq), maxdelay_(maxdelay), y1_(0.), freqmul_(th.rate.invNyquistRate * kFirstOrderCoeffScale)
 	{
@@ -873,10 +874,10 @@ public:
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~LPCombC() { free(buf); }
+
+	~LPCombC() = default;
 	
 	virtual const char* TypeName() const override { return "LPCombC"; }
     
@@ -1084,20 +1085,20 @@ class AllpassN : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	AllpassN(Thread& th, Arg in, Arg delay, Z maxdelay, Arg decay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), decay_(decay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~AllpassN() { free(buf); }
+
+	~AllpassN() = default;
 	
 	virtual const char* TypeName() const override { return "AllpassN"; }
     
@@ -1185,20 +1186,20 @@ class AllpassL : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	AllpassL(Thread& th, Arg in, Arg delay, Z maxdelay, Arg decay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), decay_(decay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~AllpassL() { free(buf); }
+
+	~AllpassL() = default;
 	
 	virtual const char* TypeName() const override { return "AllpassL"; }
     
@@ -1316,20 +1317,20 @@ class AllpassC : public Gen
 	int32_t bufSize;
 	int32_t bufMask;
 	int32_t bufPos;
-	Z* buf;
+	std::unique_ptr<Z[]> buf;
 	Z sr;
 public:
-	
+
 	AllpassC(Thread& th, Arg in, Arg delay, Z maxdelay, Arg decay) : Gen(th, itemTypeZ, false), in_(in), delay_(delay), decay_(decay), maxdelay_(maxdelay)
 	{
 		sr = th.rate.sampleRate;
 		bufSize = NEXTPOWEROFTWO((int32_t)ceil(sr * maxdelay));
 		bufMask = bufSize - 1;
 		bufPos = 0;
-		buf = (Z*)calloc(bufSize, sizeof(Z));
+		buf = std::make_unique<Z[]>(bufSize);
 	}
-	
-	~AllpassC() { free(buf); }
+
+	~AllpassC() = default;
 	
 	virtual const char* TypeName() const override { return "AllpassC"; }
     
@@ -1484,18 +1485,16 @@ class FDN : public Object
 	
 	struct FDNDelay
 	{
-		Z* buf;
+		std::unique_ptr<Z[]> buf;
 		int size, mask, rpos, wpos, offset;
 		Z delay, gain;
 		Z fbLo, fbMid, fbHi;
 		Z x1A, x1B, x1C, x1D;
 		Z y1A, y1B, y1C, y1D;
-		
-		FDNDelay()
-		{
-		}
-		~FDNDelay() { free(buf); }
-		
+
+		FDNDelay() = default;
+		~FDNDelay() = default;
+
 		void set(Thread& th, const FDN& fdn, Z inDelay, int& ioSampleDelay)
 		{
 			int sampleDelay = (int)(th.rate.sampleRate * inDelay);
@@ -1508,7 +1507,7 @@ class FDN : public Object
 			printf("delay %6d %6d %6d %f\n", sampleDelay, size, mask, actualDelay);
 			rpos = 0;
 			wpos = sampleDelay;
-			buf = (Z*)calloc(size, sizeof(Z));
+			buf = std::make_unique<Z[]>(size);
 			const Z n1 = 1. / sqrt(kNumDelays);
 			//const Z n1 = 1. / kNumDelays;
 			fbLo  = n1 * calcDecay(actualDelay / fdn.decayLo_);

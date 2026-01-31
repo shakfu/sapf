@@ -51,8 +51,10 @@ endif()
 # Platform-specific sources
 if(APPLE)
 	list(APPEND ENGINE_SOURCES makeImage.mm)
+	list(APPEND ENGINE_SOURCES platform/PlatformMac.cpp)
 else()
 	list(APPEND ENGINE_SOURCES makeImageStub.cpp)
+	list(APPEND ENGINE_SOURCES platform/PlatformUnix.cpp)
 endif()
 
 add_library(

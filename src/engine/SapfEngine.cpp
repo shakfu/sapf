@@ -1,15 +1,10 @@
 #include "sapf/Engine.hpp"
+#include "sapf/platform/Platform.hpp"
 
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-#if defined(__APPLE__)
-#include <dispatch/dispatch.h>
-#else
-#include <thread>
-#endif
 
 #ifdef SAPF_USE_MANTA
 #include "Manta.h"
@@ -137,8 +132,7 @@ void SapfEngine::startMantaEventLoop() const
 	}
 	printf("Manta %s connected.\n", m->IsConnected() ? "is" : "IS NOT");
 
-#if defined(__APPLE__)
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+	sapf::platform::runAsync([]() {
 		while(true) {
 			try {
 				MantaUSB::HandleEvents();
@@ -147,19 +141,7 @@ void SapfEngine::startMantaEventLoop() const
 				sleep(1);
 			}
 		}
-	});
-#else
-	std::thread([]() {
-		while(true) {
-			try {
-				MantaUSB::HandleEvents();
-				usleep(5000);
-			} catch(...) {
-				sleep(1);
-			}
-		}
-	}).detach();
-#endif
+	}, true);
 #endif // SAPF_USE_MANTA
 }
 
