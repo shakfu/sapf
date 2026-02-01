@@ -19,6 +19,29 @@
 #include <stdio.h>
 #include <cmath>
 
+// MSVC compatibility for __builtin_clzll (count leading zeros for 64-bit)
+#if defined(_MSC_VER)
+#include <intrin.h>
+inline int sapf_clzll(unsigned long long x) {
+    unsigned long index;
+#if defined(_WIN64)
+    if (_BitScanReverse64(&index, x)) {
+        return 63 - (int)index;
+    }
+#else
+    // 32-bit fallback: check high 32 bits first, then low 32 bits
+    if (_BitScanReverse(&index, (unsigned long)(x >> 32))) {
+        return 31 - (int)index;
+    }
+    if (_BitScanReverse(&index, (unsigned long)x)) {
+        return 63 - (int)index;
+    }
+#endif
+    return 64; // undefined for x == 0, but return 64 for safety
+}
+#define __builtin_clzll(x) sapf_clzll(x)
+#endif
+
 FFT::FFT()
 	: n(0)
 	, log2n(0)

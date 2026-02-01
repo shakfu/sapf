@@ -56,11 +56,15 @@ add_subdirectory(thirdparty/rtmidi)
 set(REPLXX_BUILD_EXAMPLES OFF CACHE BOOL "Disable replxx examples" FORCE)
 add_subdirectory(thirdparty/replxx)
 
-# FFTW for non-Apple platforms
+# FFTW for non-Apple platforms (Linux and Windows)
 if(NOT APPLE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static FFTW" FORCE)
     set(BUILD_TESTS OFF CACHE BOOL "Disable FFTW tests" FORCE)
     set(DISABLE_FORTRAN ON CACHE BOOL "Disable Fortran wrappers" FORCE)
+    # Enable SSE2 for better performance on x86/x64
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i686)")
+        set(ENABLE_SSE2 ON CACHE BOOL "Enable SSE2 for FFTW" FORCE)
+    endif()
     add_subdirectory(thirdparty/fftw-3.3.10)
 endif()
 

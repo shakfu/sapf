@@ -30,6 +30,7 @@
  * Platform-specific implementations are in:
  * - src/engine/platform/PlatformMac.cpp (macOS)
  * - src/engine/platform/PlatformUnix.cpp (Linux and other Unix)
+ * - src/engine/platform/PlatformWindows.cpp (Windows)
  */
 
 namespace sapf {

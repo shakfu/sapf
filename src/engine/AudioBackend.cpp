@@ -71,7 +71,7 @@ void EnsureDefaultAudioBackend()
 		return;
 	}
 #endif
-	SetAudioBackend(CreateNullAudioBackend("Windows audio backend will use RtAudio once configured."));
+	SetAudioBackend(CreateNullAudioBackend("No audio devices available. Ensure RtAudio is enabled and audio drivers are installed."));
 	return;
 #else
 #ifdef SAPF_USE_RTAUDIO

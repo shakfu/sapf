@@ -52,6 +52,9 @@ endif()
 if(APPLE)
 	list(APPEND ENGINE_SOURCES makeImage.mm)
 	list(APPEND ENGINE_SOURCES platform/PlatformMac.cpp)
+elseif(WIN32)
+	list(APPEND ENGINE_SOURCES makeImageStub.cpp)
+	list(APPEND ENGINE_SOURCES platform/PlatformWindows.cpp)
 else()
 	list(APPEND ENGINE_SOURCES makeImageStub.cpp)
 	list(APPEND ENGINE_SOURCES platform/PlatformUnix.cpp)
@@ -91,12 +94,18 @@ if(SAPF_USE_RTMIDI)
 	target_include_directories(sapf_engine PUBLIC ${SAPF_ROOT}/thirdparty/rtmidi)
 endif()
 
-# FFTW include directory for non-Apple platforms
+# FFTW include directory for non-Apple platforms (Linux and Windows)
 if(NOT APPLE)
 	target_include_directories(
 		sapf_engine
 		PUBLIC
 		${SAPF_ROOT}/thirdparty/fftw-3.3.10/api
+	)
+	# Also add the FFTW build directory for config.h
+	target_include_directories(
+		sapf_engine
+		PUBLIC
+		${CMAKE_BINARY_DIR}/thirdparty/fftw-3.3.10
 	)
 endif()
 
@@ -153,6 +162,8 @@ if(APPLE)
 		"-framework CoreMidi"
 		"-framework CoreServices"
 	)
+elseif(WIN32)
+	target_link_libraries(sapf_engine PUBLIC fftw3 winmm)
 elseif(UNIX)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(ALSA IMPORTED_TARGET alsa)
@@ -160,8 +171,6 @@ elseif(UNIX)
 		target_link_libraries(sapf_engine PUBLIC PkgConfig::ALSA)
 	endif()
 	target_link_libraries(sapf_engine PUBLIC fftw3 pthread m)
-elseif(WIN32)
-	target_link_libraries(sapf_engine PUBLIC winmm)
 endif()
 
 set_target_properties(

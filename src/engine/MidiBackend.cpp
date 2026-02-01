@@ -63,7 +63,7 @@ void EnsureDefaultMidiBackend()
 		return;
 	}
 #endif
-	SetMidiBackend(CreateNullMidiBackend("Windows MIDI backend will use RtMidi once configured."));
+	SetMidiBackend(CreateNullMidiBackend("No MIDI devices available. Ensure RtMidi is enabled and MIDI drivers are installed."));
 	return;
 #else
 #ifdef SAPF_USE_RTMIDI

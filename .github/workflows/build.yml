@@ -40,7 +40,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libasound2-dev \
-            libedit-dev \
             libusb-1.0-0-dev
 
       - name: Configure CMake
@@ -61,18 +60,26 @@ jobs:
             build/libsapf.a
           retention-days: 14
 
-  # build-windows:
-  #   runs-on: windows-latest
-  #   # Windows support is experimental - libedit not available
-  #   continue-on-error: true
-  #   steps:
-  #     - uses: actions/checkout@v4
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - name: Configure CMake
-  #       run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
-  #     - name: Build
-  #       run: cmake --build build --config Release
+      - name: Build
+        run: cmake --build build --config Release
 
-  #     - name: Run Tests
-  #       run: ctest --test-dir build --output-on-failure -C Release
+      - name: Run Tests
+        # Skip MIDI tests on Windows CI (no MIDI devices available)
+        run: ctest --test-dir build --output-on-failure -C Release -E "^midi_"
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sapf-windows
+          path: |
+            build/Release/sapf.exe
+            build/Release/sapf.lib
+          retention-days: 14
