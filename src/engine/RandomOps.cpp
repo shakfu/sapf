@@ -1578,8 +1578,8 @@ struct XorNoise1 : OneInputUGen<XorNoise1>
 
 
 struct XorNoise2 : OneInputUGen<XorNoise2>
-{	
-    uint64_t s[2] = { 0xA40203C12F2AD936LL, 0x9E390BD16B74D6D3LL };
+{
+    uint64_t s[2] = { 0xA40203C12F2AD936ULL, 0x9E390BD16B74D6D3ULL };
 	
 	XorNoise2(Thread& th,  Arg a) : OneInputUGen<XorNoise2>(th, a)
 	{

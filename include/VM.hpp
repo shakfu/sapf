@@ -21,9 +21,20 @@
 #include "symbol.hpp"
 #include "rgen.hpp"
 #include <vector>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#ifndef PATH_MAX
+#define PATH_MAX 260
+#endif
+#else
 #include <sys/time.h>
+#endif
 #include <atomic>
 #include <climits>
+#include <mutex>
 
 #define USE_REPLXX 1
 
@@ -33,34 +44,34 @@ extern "C" {
 }
 #endif
 
-extern pthread_mutex_t gHelpMutex;
+extern std::mutex gHelpMutex;
 
 class Unlocker
 {
-	pthread_mutex_t* mLock;
+	std::mutex* mLock;
 public:
-	Unlocker(pthread_mutex_t* inLock) : mLock(inLock)
+	Unlocker(std::mutex* inLock) : mLock(inLock)
 	{
-		pthread_mutex_unlock(mLock);
+		mLock->unlock();
 	}
-	~Unlocker() 
-	{ 
-		pthread_mutex_lock(mLock); 
+	~Unlocker()
+	{
+		mLock->lock();
 	}
 };
 
 
 class Locker
 {
-	pthread_mutex_t* mLock;
+	std::mutex* mLock;
 public:
-	Locker(pthread_mutex_t* inLock) : mLock(inLock)
+	Locker(std::mutex* inLock) : mLock(inLock)
 	{
-		pthread_mutex_lock(mLock); 
+		mLock->lock();
 	}
-	~Locker() 
-	{ 
-		pthread_mutex_unlock(mLock);
+	~Locker()
+	{
+		mLock->unlock();
 	}
 };
 

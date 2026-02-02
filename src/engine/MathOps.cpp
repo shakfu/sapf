@@ -16,6 +16,9 @@
 
 #include "MathOps.hpp"
 #include "clz.hpp"
+#ifdef _WIN32
+#include "sapf/platform/WindowsCompat.hpp"
+#endif
 #include <ctype.h>
 #include "primes.hpp"
 #include "sapf/AccelerateCompat.hpp"

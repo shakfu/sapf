@@ -8,12 +8,12 @@
 
 #include <algorithm>
 #include <cstring>
-#include <pthread.h>
+#include <mutex>
 
 namespace {
 
 const int kMaxChannels = 32;
-pthread_mutex_t gMaxBackendMutex = PTHREAD_MUTEX_INITIALIZER;
+std::mutex gMaxBackendMutex;
 
 } // namespace
 

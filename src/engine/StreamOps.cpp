@@ -26,6 +26,9 @@
 #include "UGen.hpp"
 #include "dsp.hpp"
 #include "SoundFiles.hpp"
+#ifdef _WIN32
+#include "sapf/platform/WindowsCompat.hpp"
+#endif
 
 const Z kOneThird = 1. / 3.;
 

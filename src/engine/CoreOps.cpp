@@ -18,7 +18,12 @@
 #include "Parser.hpp"
 #include "clz.hpp"
 #include <string>
+#include <thread>
+#ifdef _WIN32
+#include "sapf/platform/WindowsCompat.hpp"
+#else
 #include <unistd.h>
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1002,11 +1007,11 @@ static void* gofun(void* ptr)
 static void go_(Thread& th, Prim* prim)
 {
     P<Fun> fun = th.popFun("go : fun");
-    
-    Thread* newThread = new Thread (th, fun); 
-   
-    pthread_t pt;
-    pthread_create(&pt, NULL, gofun, newThread);
+
+    Thread* newThread = new Thread (th, fun);
+
+    std::thread t(gofun, newThread);
+    t.detach();
 }
 
 static void sleep_(Thread& th, Prim* prim)
@@ -1315,24 +1320,63 @@ static void zplug_(Thread& th, Prim* prim)
 
 #pragma mark GLOB
 
+#ifdef _WIN32
+#include <windows.h>
+
+static void glob_(Thread& th, Prim* prim)
+{
+	P<String> pat = th.popString("glob : pattern");
+
+	P<Array> a = new Array(itemTypeV, 0);
+	WIN32_FIND_DATAA findData;
+	HANDLE hFind = FindFirstFileA(pat->s, &findData);
+
+	if (hFind != INVALID_HANDLE_VALUE) {
+		do {
+			// Skip . and ..
+			if (strcmp(findData.cFileName, ".") != 0 && strcmp(findData.cFileName, "..") != 0) {
+				// Build full path from pattern directory + filename
+				std::string patStr(pat->s);
+				size_t lastSlash = patStr.find_last_of("/\\");
+				std::string fullPath;
+				if (lastSlash != std::string::npos) {
+					fullPath = patStr.substr(0, lastSlash + 1) + findData.cFileName;
+				} else {
+					fullPath = findData.cFileName;
+				}
+				// Add trailing slash for directories (like GLOB_MARK)
+				if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+					fullPath += "/";
+				}
+				a->add(new String(fullPath.c_str()));
+			}
+		} while (FindNextFileA(hFind, &findData) != 0);
+		FindClose(hFind);
+	}
+
+	th.push(new List(a));
+}
+
+#else
 #include <glob.h>
 
 static void glob_(Thread& th, Prim* prim)
 {
 	P<String> pat = th.popString("glob : pattern");
-	
+
 	glob_t g;
 	memset(&g, 0, sizeof(g));
 	glob(pat->s, GLOB_MARK, nullptr, &g);
-	
+
 	P<Array> a = new Array(itemTypeV, g.gl_pathc);
 	for (size_t i = 0; i < g.gl_pathc; ++i) {
 		a->add(new String(g.gl_pathv[i]));
 	}
 	globfree(&g);
-	
+
 	th.push(new List(a));
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
