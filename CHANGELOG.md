@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Cross-platform audio recording** via libsndfile for Linux and Windows
+  - `AlsaAudioBackend` - Recording support using libsndfile (Linux)
+  - `RtAudioBackend` - Recording support using libsndfile (Linux/Windows)
+  - Records to WAV format with automatic file opening on completion
+  - macOS continues to use native ExtAudioFile API
+- **Cross-platform MIDI testing** - MIDI smoke tests now run on all platforms
+  - Updated test patterns to work with both CoreMidi and RtMidi backends
+  - `midi_list`, `midi_start_stop`, `midi_debug` tests enabled on Linux/Windows
 - **Cross-platform sound file I/O** using libsndfile for Linux and Windows
   - `sfread` - Streaming audio file reader with seeking support
   - `sfwrite` - Audio file writer (WAV format)
@@ -37,7 +45,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- **CI/CD workflow** - Added libsndfile dependency for Linux builds; Windows builds work with audio file I/O disabled
+- **CI/CD workflow** - Full test coverage on all platforms
+  - Linux: All 264 tests including MIDI (was excluding `^midi_` pattern)
+  - Windows: All 264 tests including MIDI, libsndfile enabled via vcpkg
+  - macOS: All 264 tests (unchanged)
+- **ARCHITECTURE.md** - Added comprehensive cross-platform architecture section
+  - Platform abstraction layer documentation
+  - Audio backend architecture with fallback diagrams
+  - Recording support matrix by platform
+  - DSP acceleration (Accelerate vs FFTW3)
+  - MIDI backend architecture
+  - Compiler compatibility (MSVC intrinsics)
+  - Expanded appendix with backend file references
 - **DelayUGens.cpp** - Replaced raw `malloc`/`free` allocations with `std::unique_ptr<Z[]>` for automatic memory management in all 13 delay unit generator classes:
   - DelayN, DelayL, DelayC
   - CombN, CombL, CombC
@@ -62,6 +81,9 @@ The Object.hpp circular dependency (`V` <-> `Object`) was resolved using a stand
 
 ### Fixed
 
+- **CoreAudioBackend.cpp** - Fixed compilation error with mutex type
+  - Changed `pthread_mutex_t` to `std::mutex` for consistency with `Locker` class
+  - Replaced `Locker lock(&gPlayerMutex)` with `std::lock_guard<std::mutex>`
 - Memory management in delay UGens now uses RAII, preventing potential leaks on early returns or exceptions
 - **Portable temporary directory paths** - Replaced hardcoded `/tmp` with `std::filesystem::temp_directory_path()` for Windows compatibility
   - `SoundFiles.cpp` - Recording path generation

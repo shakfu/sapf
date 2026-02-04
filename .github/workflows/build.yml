@@ -50,7 +50,7 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Run Tests
-        run: ctest --test-dir build --output-on-failure -E "^midi_"
+        run: ctest --test-dir build --output-on-failure
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
@@ -66,17 +66,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Note: libsndfile not installed - audio file I/O disabled on Windows CI
-      # To enable, install via vcpkg: vcpkg install libsndfile
+      - name: Install vcpkg and libsndfile
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat
+          C:\vcpkg\vcpkg install libsndfile:x64-windows
+
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 
       - name: Build
         run: cmake --build build --config Release
 
       - name: Run Tests
-        # Skip MIDI tests on Windows CI (no MIDI devices available)
-        run: ctest --test-dir build --output-on-failure -C Release -E "^midi_"
+        run: ctest --test-dir build --output-on-failure -C Release
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4

@@ -30,6 +30,9 @@ void makeRecordingPath(Arg filename, char* path, int len);
 
 #if defined(__APPLE__)
 ExtAudioFileRef sfcreate(Thread& th, const char* path, int numChannels, double fileSampleRate, bool interleaved);
+#elif defined(SAPF_USE_LIBSNDFILE)
+#include <sndfile.h>
+SNDFILE* sfcreate_sndfile(const char* path, int numChannels, double fileSampleRate);
 #endif
 
 void sfwrite(Thread& th, V& v, Arg filename, bool openIt);

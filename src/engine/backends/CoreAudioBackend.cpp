@@ -21,10 +21,11 @@
 #include <AudioToolbox/AudioToolbox.h>
 #include <pthread.h>
 #include <atomic>
+#include <mutex>
 
 #include "SoundFiles.hpp"
 
-pthread_mutex_t gPlayerMutex = PTHREAD_MUTEX_INITIALIZER;
+std::mutex gPlayerMutex;
 
 const int kMaxChannels = 32;
 
@@ -85,7 +86,7 @@ static void stopPlayer(AUPlayer* player)
 
 static void stopPlaying()
 {
-	Locker lock(&gPlayerMutex);
+	std::lock_guard<std::mutex> lock(gPlayerMutex);
 
 	AUPlayer* player = gAllPlayers;
 	while (player) {
@@ -97,7 +98,7 @@ static void stopPlaying()
 
 static void stopPlayingIfDone()
 {
-	Locker lock(&gPlayerMutex);
+	std::lock_guard<std::mutex> lock(gPlayerMutex);
 	
 	AUPlayer* player = gAllPlayers;
 	while (player) {
@@ -269,7 +270,7 @@ static void playWithAudioUnit(Thread& th, V& v)
 {
 	if (!v.isList()) wrongType("play : s", "List", v);
 
-	Locker lock(&gPlayerMutex);
+	std::lock_guard<std::mutex> lock(gPlayerMutex);
 	
 	AUPlayer *player;
 	
@@ -320,7 +321,7 @@ static void recordWithAudioUnit(Thread& th, V& v, Arg filename)
 {
 	if (!v.isList()) wrongType("play : s", "List", v);
 
-	Locker lock(&gPlayerMutex);
+	std::lock_guard<std::mutex> lock(gPlayerMutex);
 	
 	AUPlayer *player;
 

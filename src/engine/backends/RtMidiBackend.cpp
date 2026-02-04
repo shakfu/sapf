@@ -96,6 +96,7 @@ int RtMidiBackendImpl::initialize(int numIn, int numOut)
 		}
 
 		initialized_ = true;
+		printf("RtMidi initialized (inputs: %d, outputs: %d)\n", numIn, numOut);
 		listDevices();
 
 		return errNone;

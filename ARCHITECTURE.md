@@ -12,7 +12,8 @@ This document describes the internal architecture of SAPF (Sound As Pure Form), 
 4. [Reference Counting](#reference-counting)
 5. [Threading Model](#threading-model)
 6. [Audio Pipeline](#audio-pipeline)
-7. [Memory Layout](#memory-layout)
+7. [Cross-Platform Architecture](#cross-platform-architecture)
+8. [Memory Layout](#memory-layout)
 
 ---
 
@@ -471,6 +472,106 @@ struct ZIn {
 
 ---
 
+## Cross-Platform Architecture
+
+SAPF supports macOS, Linux, and Windows through a layered abstraction strategy.
+
+### Platform Abstraction Layer
+
+**Location:** `include/sapf/platform/Platform.hpp`
+
+```cpp
+namespace Platform {
+    void runAsync(std::function<void()> task);  // Background execution
+    void runReplLoop(std::function<bool()> iteration);  // Event loop
+    const char* getPlatformName();
+    PlatformType getCurrentPlatform();  // MacOS, Linux, Windows, Unknown
+}
+```
+
+| Platform | Async Strategy | Event Loop |
+|----------|---------------|------------|
+| macOS | GCD (dispatch_async) | CFRunLoop |
+| Linux | std::thread | condition_variable |
+| Windows | std::thread | condition_variable |
+
+### Audio Backend Architecture
+
+Multi-tier fallback strategy ensures audio works on all platforms:
+
+```
++------------------+     +------------------+     +------------------+
+|  CoreAudioBackend|     |  RtAudioBackend  |     | NullAudioBackend |
+|    (macOS)       |     | (cross-platform) |     |   (fallback)     |
++------------------+     +------------------+     +------------------+
+         |                       |                        |
+         +-----------------------+------------------------+
+                                 |
+                         AudioBackend (interface)
+                                 |
+                    +------------+------------+
+                    |                         |
+               play(th, v)              record(th, v, filename)
+```
+
+**Backend Selection by Platform:**
+
+| Platform | Primary | Secondary | Fallback |
+|----------|---------|-----------|----------|
+| macOS | CoreAudioBackend | RtAudioBackend | NullAudioBackend |
+| Linux | RtAudioBackend | AlsaAudioBackend | NullAudioBackend |
+| Windows | RtAudioBackend | - | NullAudioBackend |
+
+**Recording Support:**
+
+| Platform | Recording API | File Format |
+|----------|--------------|-------------|
+| macOS | ExtAudioFile (AudioToolbox) | WAV, AIFF, CAF |
+| Linux | libsndfile | WAV |
+| Windows | libsndfile | WAV |
+
+### DSP Acceleration
+
+**Location:** `include/sapf/AccelerateCompat.hpp`
+
+```cpp
+#if SAPF_ACCELERATE
+    // macOS: Use Apple Accelerate.framework
+    #include <Accelerate/Accelerate.h>
+#else
+    // Linux/Windows: FFTW3 with vDSP-compatible wrapper
+    void vDSP_create_fftsetupD(...);
+    void vDSP_fft_zopD(...);
+    // ~400 lines of compatibility code
+#endif
+```
+
+### MIDI Backend Architecture
+
+| Platform | Primary | Fallback |
+|----------|---------|----------|
+| macOS | CoreMidiBackend | RtMidiBackend |
+| Linux | RtMidiBackend | NullMidiBackend |
+| Windows | RtMidiBackend | NullMidiBackend |
+
+### Compiler Compatibility
+
+MSVC-specific handling for GCC intrinsics:
+
+```cpp
+#if defined(_MSC_VER)
+#include <intrin.h>
+inline int sapf_clzll(unsigned long long x) {
+    unsigned long index;
+    _BitScanReverse64(&index, x);
+    return 63 - (int)index;
+}
+#define __builtin_clzll(x) sapf_clzll(x)
+#endif
+```
+
+---
+
 ## Memory Layout
 
 ### Object Memory
@@ -540,6 +641,8 @@ local:
 
 ## Appendix: Key Files
 
+### Core Engine
+
 | File | Purpose |
 |------|---------|
 | `include/Object.hpp` | Core type system (V, Object, List, Form, etc.) |
@@ -552,3 +655,38 @@ local:
 | `src/engine/CoreOps.cpp` | Core stack/control operations |
 | `src/engine/StreamOps.cpp` | List/stream operations |
 | `src/engine/*UGens.cpp` | Audio unit generators |
+
+### Platform Abstraction
+
+| File | Purpose |
+|------|---------|
+| `include/sapf/platform/Platform.hpp` | Platform abstraction interface |
+| `src/engine/platform/PlatformMac.cpp` | macOS implementation (GCD, CFRunLoop) |
+| `src/engine/platform/PlatformUnix.cpp` | Linux implementation (std::thread) |
+| `src/engine/platform/PlatformWindows.cpp` | Windows implementation (std::thread) |
+
+### Audio Backends
+
+| File | Purpose |
+|------|---------|
+| `include/sapf/AudioBackend.hpp` | Audio backend interface |
+| `src/engine/backends/CoreAudioBackend.cpp` | macOS native audio (AudioToolbox) |
+| `src/engine/backends/AlsaAudioBackend.cpp` | Linux native audio (ALSA + libsndfile) |
+| `src/engine/backends/RtAudioBackend.cpp` | Cross-platform audio (RtAudio + libsndfile) |
+| `src/engine/backends/NullAudioBackend.cpp` | Silent fallback |
+
+### MIDI Backends
+
+| File | Purpose |
+|------|---------|
+| `src/engine/backends/CoreMidiBackend.cpp` | macOS native MIDI |
+| `src/engine/backends/RtMidiBackend.cpp` | Cross-platform MIDI |
+| `src/engine/backends/NullMidiBackend.cpp` | Silent fallback |
+
+### DSP and File I/O
+
+| File | Purpose |
+|------|---------|
+| `include/sapf/AccelerateCompat.hpp` | FFT abstraction (Accelerate/FFTW3) |
+| `src/engine/SoundFiles.cpp` | Audio file I/O (AudioToolbox/libsndfile) |
+| `src/engine/dsp.cpp` | DSP utilities with MSVC compatibility |

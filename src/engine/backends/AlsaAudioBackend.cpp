@@ -13,6 +13,12 @@
 #include <vector>
 #include <cstdio>
 
+#include "SoundFiles.hpp"
+
+#if defined(SAPF_USE_LIBSNDFILE)
+#include <sndfile.h>
+#endif
+
 namespace {
 
 const int kMaxChannels = 32;
@@ -41,7 +47,11 @@ private:
 		int numChannels;
 		std::vector<ZIn> in;
 		bool done = false;
-		// Recording not implemented on Linux - would need libsndfile
+#if defined(SAPF_USE_LIBSNDFILE)
+		SNDFILE* recordFile = nullptr;
+		std::string recordPath;
+		std::vector<float> recordBuffer;
+#endif
 	};
 
 	void audioThreadLoop();
@@ -132,8 +142,33 @@ void AlsaAudioBackend::play(Thread& th, V& v)
 
 void AlsaAudioBackend::record(Thread& th, V& v, Arg filename)
 {
-	post("record: Recording not implemented on Linux (requires libsndfile).\n");
-	post("        Use 'play' instead, or contribute a libsndfile-based implementation.\n");
+#if defined(SAPF_USE_LIBSNDFILE)
+	auto player = createPlayer(th, v);
+	if (!player) {
+		return;
+	}
+
+	char path[1024];
+	makeRecordingPath(filename, path, sizeof(path));
+	SNDFILE* sf = sfcreate_sndfile(path, player->numChannels, vm.ar.sampleRate);
+	if (!sf) {
+		post("record: Failed to create recording file '%s'\n", path);
+		return;
+	}
+	player->recordFile = sf;
+	player->recordPath = path;
+
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		players_.push_back(std::move(player));
+	}
+	wakeThread();
+	post("Recording to '%s'\n", path);
+#else
+	(void)th; (void)v; (void)filename;
+	post("record: Recording not available (libsndfile not installed).\n");
+	post("        Install libsndfile and rebuild with SAPF_USE_LIBSNDFILE=ON.\n");
+#endif
 }
 
 void AlsaAudioBackend::stopAll()
@@ -183,6 +218,13 @@ void AlsaAudioBackend::audioThreadLoop()
 			int channels = std::min(player.numChannels, numChannels_);
 			bool done = true;
 
+#if defined(SAPF_USE_LIBSNDFILE)
+			// Prepare record buffer if recording
+			if (player.recordFile) {
+				player.recordBuffer.assign(frames * player.numChannels, 0.f);
+			}
+#endif
+
 			for (int ch = 0; ch < channels; ++ch) {
 				int framesToFill = static_cast<int>(frames);
 				bool finished = player.in[ch].fill(player.th, framesToFill, scratch_.data(), 1);
@@ -190,6 +232,14 @@ void AlsaAudioBackend::audioThreadLoop()
 					size_t idx = static_cast<size_t>(i) * numChannels_ + ch;
 					mixBuffer_[idx] += scratch_[i];
 				}
+#if defined(SAPF_USE_LIBSNDFILE)
+				// Copy to record buffer (interleaved)
+				if (player.recordFile && ch < player.numChannels) {
+					for (int i = 0; i < framesToFill; ++i) {
+						player.recordBuffer[i * player.numChannels + ch] = scratch_[i];
+					}
+				}
+#endif
 				if (framesToFill < static_cast<int>(frames)) {
 					for (size_t i = framesToFill; i < frames; ++i) {
 						size_t idx = i * numChannels_ + ch;
@@ -199,8 +249,19 @@ void AlsaAudioBackend::audioThreadLoop()
 				done = done && finished;
 			}
 
+#if defined(SAPF_USE_LIBSNDFILE)
+			// Write recorded frames to file
+			if (player.recordFile) {
+				sf_count_t written = sf_writef_float(player.recordFile, player.recordBuffer.data(), frames);
+				if (written != static_cast<sf_count_t>(frames)) {
+					post("record: write error: %s\n", sf_strerror(player.recordFile));
+				}
+			}
+#endif
+
 			player.done = done;
 			if (player.done) {
+				finalizePlayer(*it);
 				it = players_.erase(it);
 			} else {
 				++it;
@@ -309,8 +370,21 @@ void AlsaAudioBackend::wakeThread()
 
 void AlsaAudioBackend::finalizePlayer(std::unique_ptr<Player>& player)
 {
-	// Recording not implemented on Linux - nothing to finalize
+#if defined(SAPF_USE_LIBSNDFILE)
+	if (player->recordFile) {
+		sf_close(player->recordFile);
+		player->recordFile = nullptr;
+		if (!player->recordPath.empty()) {
+			post("Finished recording to '%s'\n", player->recordPath.c_str());
+			// Open the file with default application
+			char cmd[1100];
+			snprintf(cmd, sizeof(cmd), "xdg-open \"%s\" &", player->recordPath.c_str());
+			system(cmd);
+		}
+	}
+#else
 	(void)player;
+#endif
 }
 
 std::unique_ptr<AudioBackend> CreateAlsaAudioBackend()

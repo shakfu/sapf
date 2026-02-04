@@ -42,6 +42,10 @@ private:
 		ExtAudioFileRef recordFile = nullptr;
 		std::string recordPath;
 		std::vector<std::vector<float>> recordChannels;
+#elif defined(SAPF_USE_LIBSNDFILE)
+		SNDFILE* recordFile = nullptr;
+		std::string recordPath;
+		std::vector<float> recordBuffer;
 #endif
 	};
 
@@ -147,10 +151,36 @@ void RtAudioBackend::record(Thread& th, V& v, Arg filename)
 		}
 	}
 	players_.push_back(std::move(player));
+#elif defined(SAPF_USE_LIBSNDFILE)
+	auto player = createPlayer(th, v);
+	if (!player) {
+		return;
+	}
+
+	char path[1024];
+	makeRecordingPath(filename, path, sizeof(path));
+	SNDFILE* sf = sfcreate_sndfile(path, player->numChannels, vm.ar.sampleRate);
+	if (!sf) {
+		post("record: Failed to create recording file '%s'\n", path);
+		throw errFailed;
+	}
+	player->recordFile = sf;
+	player->recordPath = path;
+
+	std::lock_guard<std::mutex> lock(mutex_);
+	if (!streamOpen_) {
+		if (!ensureStreamLocked()) {
+			sf_close(player->recordFile);
+			player->recordFile = nullptr;
+			throw errFailed;
+		}
+	}
+	players_.push_back(std::move(player));
+	post("Recording to '%s'\n", path);
 #else
 	(void)th; (void)v; (void)filename;
-	post("record: Recording not implemented on this platform (requires AudioToolbox).\n");
-	post("        Use 'play' instead, or contribute a libsndfile-based implementation.\n");
+	post("record: Recording not available (libsndfile not installed).\n");
+	post("        Install libsndfile and rebuild with SAPF_USE_LIBSNDFILE=ON.\n");
 #endif
 }
 
@@ -206,6 +236,13 @@ int RtAudioBackend::render(float* output, unsigned int frames)
 		const int channels = std::min(player.numChannels, numChannels);
 		bool done = true;
 
+#if defined(SAPF_USE_LIBSNDFILE)
+		// Prepare record buffer if recording (libsndfile)
+		if (player.recordFile) {
+			player.recordBuffer.assign(frames * player.numChannels, 0.f);
+		}
+#endif
+
 		for (int ch = 0; ch < channels; ++ch) {
 			int framesToFill = static_cast<int>(frames);
 			bool finished = player.in[ch].fill(player.th, framesToFill, scratch_.data(), 1);
@@ -221,6 +258,13 @@ int RtAudioBackend::render(float* output, unsigned int frames)
 				auto& chanBuf = player.recordChannels[ch];
 				chanBuf.assign(frames, 0.f);
 				std::copy_n(scratch_.data(), framesToFill, chanBuf.data());
+			}
+#elif defined(SAPF_USE_LIBSNDFILE)
+			// Copy to record buffer (interleaved)
+			if (player.recordFile && ch < player.numChannels) {
+				for (int i = 0; i < framesToFill; ++i) {
+					player.recordBuffer[i * player.numChannels + ch] = scratch_[i];
+				}
 			}
 #endif
 			done = done && finished;
@@ -245,6 +289,14 @@ int RtAudioBackend::render(float* output, unsigned int frames)
 				post("ExtAudioFileWrite failed %d\n", (int)err);
 				ExtAudioFileDispose(player.recordFile);
 				player.recordFile = nullptr;
+			}
+		}
+#elif defined(SAPF_USE_LIBSNDFILE)
+		// Write recorded frames to file (libsndfile)
+		if (player.recordFile) {
+			sf_count_t written = sf_writef_float(player.recordFile, player.recordBuffer.data(), frames);
+			if (written != static_cast<sf_count_t>(frames)) {
+				post("record: write error: %s\n", sf_strerror(player.recordFile));
 			}
 		}
 #endif
@@ -349,9 +401,27 @@ void RtAudioBackend::finalizePlayer(std::unique_ptr<Player>& player)
 		ExtAudioFileDispose(player->recordFile);
 		player->recordFile = nullptr;
 		if (!player->recordPath.empty()) {
+			post("Finished recording to '%s'\n", player->recordPath.c_str());
 			char cmd[1100];
 			snprintf(cmd, sizeof(cmd), "open \"%s\"", player->recordPath.c_str());
 			system(cmd);
+		}
+	}
+#elif defined(SAPF_USE_LIBSNDFILE)
+	if (player->recordFile) {
+		sf_close(player->recordFile);
+		player->recordFile = nullptr;
+		if (!player->recordPath.empty()) {
+			post("Finished recording to '%s'\n", player->recordPath.c_str());
+#if defined(_WIN32)
+			char cmd[1100];
+			snprintf(cmd, sizeof(cmd), "start \"\" \"%s\"", player->recordPath.c_str());
+			system(cmd);
+#elif defined(__linux__)
+			char cmd[1100];
+			snprintf(cmd, sizeof(cmd), "xdg-open \"%s\" &", player->recordPath.c_str());
+			system(cmd);
+#endif
 		}
 	}
 #else

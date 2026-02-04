@@ -98,12 +98,13 @@ add_test(
 )
 
 # MIDI smoke tests (verify MIDI ops don't crash)
+# These tests work with both CoreMidi (macOS) and RtMidi (Linux/Windows)
 add_test(
     NAME midi_list
     COMMAND ${CMAKE_COMMAND}
         -DSAPF_BINARY=$<TARGET_FILE:sapf>
         -DINPUT=midiList
-        -DEXPECTED_PATTERN=midi.sources
+        -DEXPECTED_PATTERN=midi.source
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_test.cmake
 )
 
@@ -112,7 +113,7 @@ add_test(
     COMMAND ${CMAKE_COMMAND}
         -DSAPF_BINARY=$<TARGET_FILE:sapf>
         -DINPUT=midiStart\ midiStop
-        -DEXPECTED_PATTERN=gMIDIClient
+        -DEXPECTED_PATTERN=(gMIDIClient|RtMidi.initialized)
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_test.cmake
 )
 
