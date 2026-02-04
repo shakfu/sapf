@@ -27,18 +27,49 @@ count leading zeroes function and those that can be derived from it
 
 #include <cstdint>
 
+#ifdef _MSC_VER
+#include <intrin.h>
+
+static int32_t CLZ( int32_t arg )
+{
+	if (arg == 0) return 32;
+	unsigned long index;
+	_BitScanReverse(&index, static_cast<unsigned long>(arg));
+	return 31 - index;
+}
+
+static int64_t CLZ( int64_t arg )
+{
+	if (arg == 0) return 64;
+	unsigned long index;
+#if defined(_WIN64)
+	_BitScanReverse64(&index, static_cast<unsigned __int64>(arg));
+#else
+	// For 32-bit, scan high word first
+	if (_BitScanReverse(&index, static_cast<unsigned long>(arg >> 32))) {
+		return 31 - index;
+	}
+	_BitScanReverse(&index, static_cast<unsigned long>(arg));
+	return 63 - index;
+#endif
+	return 63 - index;
+}
+
+#else
+
 static int32_t CLZ( int32_t arg )
 {
 	if (arg == 0) return 32;
 	return __builtin_clz(arg);
 }
 
-
 static int64_t CLZ( int64_t arg )
 {
 	if (arg == 0) return 64;
 	return __builtin_clzll(arg);
 }
+
+#endif
 
 
 

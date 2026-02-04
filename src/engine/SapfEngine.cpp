@@ -4,7 +4,11 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include "sapf/platform/WindowsCompat.hpp"
+#else
 #include <unistd.h>
+#endif
 
 #ifdef SAPF_USE_MANTA
 #include "Manta.h"

@@ -21,19 +21,31 @@
 #include "elapsedTime.hpp"
 #include <stdexcept>
 #include <limits.h>
+#include <chrono>
+#ifdef _WIN32
+#include "sapf/platform/WindowsCompat.hpp"
+#endif
 
 VM vm;
 
-pthread_mutex_t gHelpMutex = PTHREAD_MUTEX_INITIALIZER;
+std::mutex gHelpMutex;
 
 std::atomic<int32_t> randSeedCounter = 77777;
 
 uint64_t timeseed()
 {
+#ifdef _WIN32
+	auto now = std::chrono::high_resolution_clock::now();
+	auto duration = now.time_since_epoch();
+	auto micros = std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+	int32_t counter = ++randSeedCounter;
+	return Hash64(micros / 1000000) + Hash64(micros % 1000000) + Hash64(counter);
+#else
 	struct timeval tv;
 	gettimeofday(&tv, 0);
 	int32_t counter = ++randSeedCounter;
 	return Hash64(tv.tv_sec) + Hash64(tv.tv_usec) + Hash64(counter);
+#endif
 }
 
 
@@ -296,7 +308,8 @@ void Thread::logTimestamp(FILE* logfile)
 	if (previousTimeStamp == 0 || tv.tv_sec - previousTimeStamp > 3600) {
 		previousTimeStamp = tv.tv_sec;
 		char date[32];
-		ctime_r(&tv.tv_sec, date);
+		time_t secs = static_cast<time_t>(tv.tv_sec);
+		ctime_r(&secs, date);
 		fprintf(logfile, ";;;;;;;; %s", date);
 		fflush(logfile);
 	}

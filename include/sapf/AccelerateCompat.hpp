@@ -1,5 +1,12 @@
 #pragma once
 
+// Prevent Windows min/max macros from interfering with std::min/std::max
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #if defined(__APPLE__)
 #define SAPF_HAS_ACCELERATE 1
 #include <Accelerate/Accelerate.h>

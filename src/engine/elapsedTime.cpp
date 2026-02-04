@@ -37,6 +37,31 @@ double elapsedTime()
 
 }
 
+#elif defined(_WIN32)
+// Windows using QueryPerformanceCounter
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+static double gHostClockFreq;
+
+extern "C" {
+
+void initElapsedTime()
+{
+	LARGE_INTEGER freq;
+	QueryPerformanceFrequency(&freq);
+	gHostClockFreq = (double)freq.QuadPart;
+}
+
+double elapsedTime()
+{
+	LARGE_INTEGER counter;
+	QueryPerformanceCounter(&counter);
+	return (double)counter.QuadPart / gHostClockFreq;
+}
+
+}
+
 #else
 // Linux/other platforms using clock_gettime
 #include <time.h>
