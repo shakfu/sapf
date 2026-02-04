@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Cross-platform sound file I/O** using libsndfile for Linux and Windows
+  - `sfread` - Streaming audio file reader with seeking support
+  - `sfwrite` - Audio file writer (WAV format)
+  - macOS continues to use native AudioToolbox/ExtAudioFile
+  - Graceful fallback to stub implementations if libsndfile not installed
+  - CMake auto-detection via pkg-config (`SAPF_USE_LIBSNDFILE` option)
+- **Windows platform support** (`src/engine/platform/PlatformWindows.cpp`)
+  - Async execution using std::thread
+  - REPL event loop using std::mutex and condition variables
+  - MSVC compiler compatibility for `__builtin_clzll` intrinsic
 - **Unit test infrastructure** using Google Test framework
   - `tests/unit/test_refcount.cpp` - P<T> smart pointer and reference counting (16 tests)
   - `tests/unit/test_value.cpp` - V class operations, type checking, conversions (35 tests)
@@ -27,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **CI/CD workflow** - Added libsndfile dependency for Linux builds; Windows builds work with audio file I/O disabled
 - **DelayUGens.cpp** - Replaced raw `malloc`/`free` allocations with `std::unique_ptr<Z[]>` for automatic memory management in all 13 delay unit generator classes:
   - DelayN, DelayL, DelayC
   - CombN, CombL, CombC
@@ -52,6 +63,9 @@ The Object.hpp circular dependency (`V` <-> `Object`) was resolved using a stand
 ### Fixed
 
 - Memory management in delay UGens now uses RAII, preventing potential leaks on early returns or exceptions
+- **Portable temporary directory paths** - Replaced hardcoded `/tmp` with `std::filesystem::temp_directory_path()` for Windows compatibility
+  - `SoundFiles.cpp` - Recording path generation
+  - `StreamOps.cpp` - Spectrogram output path
 
 ## [1.0.0] - Prior Version
 

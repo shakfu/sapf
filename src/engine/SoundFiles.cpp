@@ -17,6 +17,7 @@
 #include "SoundFiles.hpp"
 #include <valarray>
 #include <atomic>
+#include <filesystem>
 
 extern char gSessionTime[256];
 
@@ -24,13 +25,14 @@ std::atomic<int32_t> gFileCount = 0;
 
 void makeRecordingPath(Arg filename, char* path, int len)
 {
+	auto tempDir = std::filesystem::temp_directory_path().string();
 	if (filename.isString()) {
 		const char* recDir = getenv("SAPF_RECORDINGS");
-		if (!recDir || strlen(recDir)==0) recDir = "/tmp";
+		if (!recDir || strlen(recDir)==0) recDir = tempDir.c_str();
 		snprintf(path, len, "%s/%s.wav", recDir, ((String*)filename.o())->s);
 	} else {
 		int32_t count = ++gFileCount;
-		snprintf(path, len, "/tmp/sapf-%s-%04d.wav", gSessionTime, count);
+		snprintf(path, len, "%s/sapf-%s-%04d.wav", tempDir.c_str(), gSessionTime, count);
 	}
 }
 
@@ -410,20 +412,304 @@ void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 	}
 }
 
-#else
-// Non-Apple platforms: stub implementations
-// TODO: Implement using libsndfile or similar cross-platform library
+#elif defined(SAPF_USE_LIBSNDFILE)
+// Non-Apple platforms: libsndfile implementation
+
+#include <sndfile.h>
+
+class SFReaderOutputChannel;
+
+class SFReader : public Object
+{
+	SNDFILE* mSF;
+	SF_INFO mSFInfo;
+	int64_t mFramesRemaining;
+	SFReaderOutputChannel* mOutputs;
+	int mNumChannels;
+	std::vector<double> mInterleavedBuffer;
+	bool mFinished = false;
+
+public:
+	SFReader(SNDFILE* inSF, SF_INFO& inInfo, int64_t inDuration);
+	~SFReader();
+
+	virtual const char* TypeName() const override { return "SFReader"; }
+
+	P<List> createOutputs(Thread& th);
+	bool pull(Thread& th);
+	void fulfillOutputs(int blockSize);
+	void produceOutputs(int shrinkBy);
+};
+
+class SFReaderOutputChannel : public Gen
+{
+	friend class SFReader;
+	P<SFReader> mSFReader;
+	SFReaderOutputChannel* mNextOutput = nullptr;
+	Z* mDummy = nullptr;
+	Z* mOutBuffer = nullptr;
+
+public:
+	SFReaderOutputChannel(Thread& th, SFReader* inSFReader)
+		: Gen(th, itemTypeZ, true), mSFReader(inSFReader)
+	{
+	}
+
+	~SFReaderOutputChannel()
+	{
+		if (mDummy) free(mDummy);
+	}
+
+	virtual void norefs() override
+	{
+		mOut = nullptr;
+		mSFReader = nullptr;
+	}
+
+	virtual const char* TypeName() const override { return "SFReaderOutputChannel"; }
+
+	virtual void pull(Thread& th) override
+	{
+		if (mSFReader->pull(th)) {
+			end();
+		}
+	}
+};
+
+SFReader::SFReader(SNDFILE* inSF, SF_INFO& inInfo, int64_t inDuration)
+	: mSF(inSF), mSFInfo(inInfo), mNumChannels(inInfo.channels), mFramesRemaining(inDuration)
+{
+}
+
+SFReader::~SFReader()
+{
+	if (mSF) sf_close(mSF);
+	SFReaderOutputChannel* output = mOutputs;
+	while (output) {
+		SFReaderOutputChannel* next = output->mNextOutput;
+		delete output;
+		output = next;
+	}
+}
+
+void SFReader::fulfillOutputs(int blockSize)
+{
+	mInterleavedBuffer.resize(blockSize * mNumChannels);
+	SFReaderOutputChannel* output = mOutputs;
+	for (int i = 0; output; ++i, output = output->mNextOutput) {
+		if (output->mOut) {
+			output->mOutBuffer = output->mOut->fulfillz(blockSize);
+		} else {
+			if (!output->mDummy)
+				output->mDummy = (Z*)calloc(output->mBlockSize, sizeof(Z));
+			output->mOutBuffer = output->mDummy;
+		}
+		memset(output->mOutBuffer, 0, blockSize * sizeof(Z));
+	}
+}
+
+void SFReader::produceOutputs(int shrinkBy)
+{
+	SFReaderOutputChannel* output = mOutputs;
+	while (output) {
+		if (output->mOut)
+			output->produce(shrinkBy);
+		output = output->mNextOutput;
+	}
+}
+
+P<List> SFReader::createOutputs(Thread& th)
+{
+	P<List> s = new List(itemTypeV, mNumChannels);
+
+	SFReaderOutputChannel* last = nullptr;
+	P<Array> a = s->mArray;
+	for (int i = 0; i < mNumChannels; ++i) {
+		SFReaderOutputChannel* c = new SFReaderOutputChannel(th, this);
+		if (last) last->mNextOutput = c;
+		else mOutputs = c;
+		last = c;
+		a->add(new List(c));
+	}
+
+	return s;
+}
+
+bool SFReader::pull(Thread& th)
+{
+	if (mFramesRemaining == 0)
+		mFinished = true;
+
+	if (mFinished)
+		return true;
+
+	SFReaderOutputChannel* output = mOutputs;
+	int blockSize = output->mBlockSize;
+	if (mFramesRemaining > 0)
+		blockSize = (int)std::min(mFramesRemaining, (int64_t)blockSize);
+
+	fulfillOutputs(blockSize);
+
+	// Read interleaved data from file
+	sf_count_t framesRead = sf_readf_double(mSF, mInterleavedBuffer.data(), blockSize);
+
+	if (framesRead == 0) {
+		mFinished = true;
+	}
+
+	// Deinterleave into output channels
+	for (sf_count_t frame = 0; frame < framesRead; ++frame) {
+		SFReaderOutputChannel* out = mOutputs;
+		for (int ch = 0; ch < mNumChannels && out; ++ch, out = out->mNextOutput) {
+			out->mOutBuffer[frame] = mInterleavedBuffer[frame * mNumChannels + ch];
+		}
+	}
+
+	produceOutputs(blockSize - (int)framesRead);
+	if (mFramesRemaining > 0) mFramesRemaining -= blockSize;
+
+	return mFinished;
+}
 
 void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
 {
-	post("sfread: Sound file reading not implemented on this platform\n");
-	post("        Consider contributing a libsndfile-based implementation.\n");
+	const char* path = ((String*)filename.o())->s;
+
+	SF_INFO sfinfo;
+	memset(&sfinfo, 0, sizeof(sfinfo));
+
+	SNDFILE* sf = sf_open(path, SFM_READ, &sfinfo);
+	if (!sf) {
+		post("sfread: failed to open file '%s': %s\n", path, sf_strerror(nullptr));
+		return;
+	}
+
+	if (offset > 0) {
+		sf_count_t seekResult = sf_seek(sf, offset, SEEK_SET);
+		if (seekResult < 0) {
+			post("sfread: seek failed for file '%s'\n", path);
+			sf_close(sf);
+			return;
+		}
+	}
+
+	SFReader* sfr = new SFReader(sf, sfinfo, frames);
+	th.push(sfr->createOutputs(th));
+}
+
+SNDFILE* sfcreate_sndfile(const char* path, int numChannels, double fileSampleRate)
+{
+	SF_INFO sfinfo;
+	memset(&sfinfo, 0, sizeof(sfinfo));
+	sfinfo.samplerate = (int)fileSampleRate;
+	sfinfo.channels = numChannels;
+	sfinfo.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+
+	SNDFILE* sf = sf_open(path, SFM_WRITE, &sfinfo);
+	if (!sf) {
+		post("sfcreate: failed to create file '%s': %s\n", path, sf_strerror(nullptr));
+		return nullptr;
+	}
+
+	return sf;
 }
 
 void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 {
-	post("sfwrite: Sound file writing not implemented on this platform\n");
-	post("         Consider contributing a libsndfile-based implementation.\n");
+	std::vector<ZIn> in;
+
+	int numChannels = 0;
+
+	if (v.isZList()) {
+		if (!v.isFinite()) indefiniteOp(">sf : s - indefinite number of frames", "");
+		numChannels = 1;
+		in.push_back(ZIn(v));
+	} else {
+		if (!v.isFinite()) indefiniteOp(">sf : s - indefinite number of channels", "");
+		P<List> s = (List*)v.o();
+		s = s->pack(th);
+		Array* a = s->mArray();
+		numChannels = (int)a->size();
+
+		if (numChannels > kMaxSFChannels)
+			throw errOutOfRange;
+
+		bool allIndefinite = true;
+		for (int i = 0; i < numChannels; ++i) {
+			V va = a->at(i);
+			if (va.isFinite()) allIndefinite = false;
+			in.push_back(ZIn(va));
+			va.o = nullptr;
+		}
+
+		s = nullptr;
+		a = nullptr;
+
+		if (allIndefinite) indefiniteOp(">sf : s - all channels have indefinite number of frames", "");
+	}
+	v.o = nullptr;
+
+	char path[1024];
+	makeRecordingPath(filename, path, 1024);
+
+	double fileSampleRate = th.rate.sampleRate;
+	SNDFILE* sf = sfcreate_sndfile(path, numChannels, fileSampleRate);
+	if (!sf) return;
+
+	std::valarray<float> buf(0.f, numChannels * kBufSize);
+
+	int64_t framesWritten = 0;
+	bool done = false;
+	while (!done) {
+		int minn = kBufSize;
+		memset(&buf[0], 0, kBufSize * numChannels * sizeof(float));
+		for (int i = 0; i < numChannels; ++i) {
+			int n = kBufSize;
+			bool imdone = in[i].fill(th, n, &buf[0] + i, numChannels);
+			if (imdone) done = true;
+			minn = std::min(n, minn);
+		}
+
+		sf_count_t written = sf_writef_float(sf, &buf[0], minn);
+		if (written != minn) {
+			post("sfwrite: write error: %s\n", sf_strerror(sf));
+			break;
+		}
+
+		framesWritten += minn;
+	}
+
+	post("wrote file '%s'  %d channels  %g secs\n", path, numChannels, framesWritten * th.rate.invSampleRate);
+
+	sf_close(sf);
+
+	if (openIt) {
+		// Cross-platform file opening
+#if defined(_WIN32)
+		char cmd[1100];
+		snprintf(cmd, 1100, "start \"\" \"%s\"", path);
+		system(cmd);
+#elif defined(__linux__)
+		char cmd[1100];
+		snprintf(cmd, 1100, "xdg-open \"%s\" &", path);
+		system(cmd);
+#endif
+	}
 }
 
-#endif // __APPLE__
+#else
+// Non-Apple platforms without libsndfile: stub implementations
+
+void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
+{
+	post("sfread: Sound file reading not available on this platform.\n");
+	post("        Install libsndfile and rebuild with SAPF_USE_LIBSNDFILE=ON.\n");
+}
+
+void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
+{
+	post("sfwrite: Sound file writing not available on this platform.\n");
+	post("         Install libsndfile and rebuild with SAPF_USE_LIBSNDFILE=ON.\n");
+}
+
+#endif // __APPLE__ / SAPF_USE_LIBSNDFILE

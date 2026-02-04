@@ -2,6 +2,11 @@ option(SAPF_USE_RTAUDIO "Include RtAudio backend" ON)
 option(SAPF_USE_RTMIDI "Include RtMidi backend" ON)
 option(SAPF_USE_MANTA "Include Manta controller support" OFF)
 
+# libsndfile for cross-platform audio file I/O (non-Apple only)
+if(NOT APPLE)
+    option(SAPF_USE_LIBSNDFILE "Use libsndfile for audio file I/O" ON)
+endif()
+
 set(ENGINE_SOURCES
 	MidiBackend.cpp
 	MidiRouter.cpp
@@ -77,6 +82,18 @@ endif()
 
 if(SAPF_USE_RTMIDI)
 	target_compile_definitions(sapf_engine PUBLIC SAPF_USE_RTMIDI)
+endif()
+
+# libsndfile for non-Apple platforms
+if(NOT APPLE AND SAPF_USE_LIBSNDFILE)
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(SNDFILE IMPORTED_TARGET sndfile)
+	if(SNDFILE_FOUND)
+		target_compile_definitions(sapf_engine PUBLIC SAPF_USE_LIBSNDFILE)
+		message(STATUS "libsndfile found - enabling cross-platform audio file I/O")
+	else()
+		message(WARNING "libsndfile not found - audio file I/O will be disabled on this platform")
+	endif()
 endif()
 
 target_include_directories(
@@ -164,6 +181,9 @@ if(APPLE)
 	)
 elseif(WIN32)
 	target_link_libraries(sapf_engine PUBLIC fftw3 winmm)
+	if(SAPF_USE_LIBSNDFILE AND SNDFILE_FOUND)
+		target_link_libraries(sapf_engine PUBLIC PkgConfig::SNDFILE)
+	endif()
 elseif(UNIX)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(ALSA IMPORTED_TARGET alsa)
@@ -171,6 +191,9 @@ elseif(UNIX)
 		target_link_libraries(sapf_engine PUBLIC PkgConfig::ALSA)
 	endif()
 	target_link_libraries(sapf_engine PUBLIC fftw3 pthread m)
+	if(SAPF_USE_LIBSNDFILE AND SNDFILE_FOUND)
+		target_link_libraries(sapf_engine PUBLIC PkgConfig::SNDFILE)
+	endif()
 endif()
 
 set_target_properties(

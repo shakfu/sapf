@@ -22,6 +22,7 @@
 #include <float.h>
 #include <vector>
 #include <algorithm>
+#include <filesystem>
 #include "MultichannelExpansion.hpp"
 #include "UGen.hpp"
 #include "dsp.hpp"
@@ -5698,13 +5699,14 @@ static void sgram_(Thread& th, Prim* prim)
 	}
 
 	char path[1024];
+	auto tempDir = std::filesystem::temp_directory_path().string();
 	if (filename.isString()) {
 		const char* sgramDir = getenv("SAPF_SPECTROGRAMS");
-		if (!sgramDir || strlen(sgramDir)==0) sgramDir = "/tmp";
+		if (!sgramDir || strlen(sgramDir)==0) sgramDir = tempDir.c_str();
 		snprintf(path, 1024, "%s/%s-%d.jpg", sgramDir, ((String*)filename.o())->s, (int)floor(dBfloor + .5));
 	} else {
 		int32_t count = ++gSpectrogramFileCount;
-		snprintf(path, 1024, "/tmp/sapf-%s-%04d.jpg", gSessionTime, count);
+		snprintf(path, 1024, "%s/sapf-%s-%04d.jpg", tempDir.c_str(), gSessionTime, count);
 	}
 
 
