@@ -99,6 +99,7 @@ void Thread::run(Opcode* opc)
 	Thread& th = *this;
 	try {
 		for (;;++opc) {
+			checkInterrupt();
 
 			V& v = opc->v;
 

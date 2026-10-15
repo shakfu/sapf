@@ -47,3 +47,9 @@ add_sapf_unit_test(test_host_audio test_host_audio.cpp)
 
 # Unit generator tests
 add_sapf_unit_test(test_ugens test_ugens.cpp)
+
+# Accelerate emulation off Apple
+add_sapf_unit_test(test_accelerate_compat test_accelerate_compat.cpp)
+
+# SapfEngineConfig::openFiles
+add_sapf_unit_test(test_open_files test_open_files.cpp)

@@ -404,7 +404,7 @@ void RtAudioBackend::finalizePlayer(std::unique_ptr<Player>& player)
 			post("Finished recording to '%s'\n", player->recordPath.c_str());
 			char cmd[1100];
 			snprintf(cmd, sizeof(cmd), "open \"%s\"", player->recordPath.c_str());
-			system(cmd);
+			if (vm.openFiles) system(cmd);
 		}
 	}
 #elif defined(SAPF_USE_LIBSNDFILE)
@@ -416,11 +416,11 @@ void RtAudioBackend::finalizePlayer(std::unique_ptr<Player>& player)
 #if defined(_WIN32)
 			char cmd[1100];
 			snprintf(cmd, sizeof(cmd), "start \"\" \"%s\"", player->recordPath.c_str());
-			system(cmd);
+			if (vm.openFiles) system(cmd);
 #elif defined(__linux__)
 			char cmd[1100];
 			snprintf(cmd, sizeof(cmd), "xdg-open \"%s\" &", player->recordPath.c_str());
-			system(cmd);
+			if (vm.openFiles) system(cmd);
 #endif
 		}
 	}

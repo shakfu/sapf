@@ -180,31 +180,32 @@ inline void vDSP_blkman_windowD(double* data, int n, int flag)
 	}
 }
 
+// As in Accelerate, the strides of interleaved (complex or polar) arrays count doubles: 2 is contiguous.
 inline void vDSP_rectD(const double* polar, int pstride, double* rect, int rstride, size_t n)
 {
 	for (size_t i = 0; i < n; ++i) {
-		const double mag = polar[2 * i * pstride];
-		const double phase = polar[2 * i * pstride + 1];
-		rect[2 * i * rstride] = mag * std::cos(phase);
-		rect[2 * i * rstride + 1] = mag * std::sin(phase);
+		const double mag = polar[i * pstride];
+		const double phase = polar[i * pstride + 1];
+		rect[i * rstride] = mag * std::cos(phase);
+		rect[i * rstride + 1] = mag * std::sin(phase);
 	}
 }
 
 inline void vDSP_ctozD(const DSPDoubleComplex* input, int istride, DSPDoubleSplitComplex* output, int ostride, size_t n)
 {
+	const double* in = reinterpret_cast<const double*>(input);
 	for (size_t i = 0; i < n; ++i) {
-		const DSPDoubleComplex& c = input[i * istride];
-		output->realp[i * ostride] = c.real;
-		output->imagp[i * ostride] = c.imag;
+		output->realp[i * ostride] = in[i * istride];
+		output->imagp[i * ostride] = in[i * istride + 1];
 	}
 }
 
 inline void vDSP_ztocD(const DSPDoubleSplitComplex* input, int istride, DSPDoubleComplex* output, int ostride, size_t n)
 {
+	double* out = reinterpret_cast<double*>(output);
 	for (size_t i = 0; i < n; ++i) {
-		DSPDoubleComplex& c = output[i * ostride];
-		c.real = input->realp[i * istride];
-		c.imag = input->imagp[i * istride];
+		out[i * ostride] = input->realp[i * istride];
+		out[i * ostride + 1] = input->imagp[i * istride];
 	}
 }
 
@@ -447,38 +448,45 @@ inline void vDSP_fft_zipD(FFTSetupD setup, DSPDoubleSplitComplex* io, int stride
 	vDSP_fft_zopD(setup, io, stride, io, stride, log2n, direction);
 }
 
+// Accelerate's real FFT of N = 2^log2n samples, packed as N/2 split complex values: x[2k] in realp[k],
+// x[2k + 1] in imagp[k]. The spectrum is packed the same way, X[0] in realp[0] and X[N/2] in imagp[0].
+// Forward gives 2 X; inverse gives N times the inverse DFT, so forward then inverse scales by 2N.
 inline void vDSP_fft_zropD(FFTSetupD setup, const DSPDoubleSplitComplex* in, int istride, DSPDoubleSplitComplex* out, int ostride, int log2n, int direction)
 {
-	vDSP_fft_zopD(setup, in, istride, out, ostride, log2n, direction);
+	(void)setup;
+	const size_t n = static_cast<size_t>(1) << log2n;
+	const size_t half = n / 2;
+	std::vector<std::complex<double>> data(n);
+	if (direction == FFT_INVERSE) {
+		data[0] = in->realp[0];
+		data[half] = in->imagp[0];
+		for (size_t k = 1; k < half; ++k) {
+			data[k] = {in->realp[k * istride], in->imagp[k * istride]};
+			data[n - k] = std::conj(data[k]);
+		}
+		sapf::fft(data, true);
+		for (size_t k = 0; k < half; ++k) {
+			out->realp[k * ostride] = data[2 * k].real();
+			out->imagp[k * ostride] = data[2 * k + 1].real();
+		}
+	} else {
+		for (size_t k = 0; k < half; ++k) {
+			data[2 * k] = in->realp[k * istride];
+			data[2 * k + 1] = in->imagp[k * istride];
+		}
+		sapf::fft(data, false);
+		for (size_t k = 1; k < half; ++k) {
+			out->realp[k * ostride] = 2. * data[k].real();
+			out->imagp[k * ostride] = 2. * data[k].imag();
+		}
+		out->realp[0] = 2. * data[0].real();
+		out->imagp[0] = 2. * data[half].real();
+	}
 }
 
 inline void vDSP_fft_zripD(FFTSetupD setup, DSPDoubleSplitComplex* io, int stride, int log2n, int direction)
 {
-	(void)setup;
-	const size_t n = static_cast<size_t>(1) << log2n;
-	std::vector<std::complex<double>> data(n);
-	for (size_t i = 0; i < n; ++i) {
-		data[i] = {0.0, 0.0};
-	}
-	const size_t half = n / 2;
-	data[0] = {io->realp[0], 0.0};
-	for (size_t k = 1; k < half; ++k) {
-		const double re = io->realp[k * stride];
-		const double im = io->imagp[k * stride];
-		data[k] = {re, im};
-		data[n - k] = {re, -im};
-	}
-	data[half] = {io->imagp[0], 0.0};
-
-	sapf::fft(data, direction == FFT_INVERSE || direction == kFFTDirection_Inverse);
-
-	for (size_t k = 0; k < half; ++k) {
-		io->realp[k * stride] = data[k].real();
-		io->imagp[k * stride] = data[k].imag();
-	}
-	// Pack DC in realp[0] and Nyquist in imagp[0] (vDSP packed format)
-	// Note: realp[0] already set in loop above, imagp[0] gets Nyquist
-	io->imagp[0] = data[half].real();
+	vDSP_fft_zropD(setup, io, stride, io, stride, log2n, direction);
 }
 
 #endif // SAPF_HAS_ACCELERATE

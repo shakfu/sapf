@@ -5,6 +5,7 @@
 #include "VM.hpp"
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace {
 
@@ -80,4 +81,120 @@ TEST_F(HostAudioTest, StopOnNextPlayReplacesPlayers) {
     ASSERT_TRUE(th_.compile("1000 0 sinosc .25 * play", fun, true));
     fun->run(th_);
     EXPECT_GT(renderPeak(), 0.35f);
+}
+
+namespace {
+
+// Input channel c holds (c + 1) * (frame + 1), counting frames across calls: the input FIFO is
+// process-wide, so a stream's first frames can be input from before the call.
+struct Rendered {
+    std::vector<float> in0, out0;
+};
+
+Rendered renderWithInput(Thread& th, MaxAudioBackend& backend, const char* code, int hostFrames, int total)
+{
+    static int64_t frame = 0;
+    P<Fun> fun;
+    EXPECT_TRUE(th.compile(code, fun, true));
+    fun->run(th);
+    std::vector<float> in0(hostFrames), in1(hostFrames), out(hostFrames);
+    const float* ins[2] = { in0.data(), in1.data() };
+    float* outs[1] = { out.data() };
+    Rendered r;
+    for (int t = 0; t < total; t += hostFrames) {
+        for (int i = 0; i < hostFrames; ++i, ++frame) {
+            in0[i] = float(frame + 1);
+            in1[i] = 2.f * float(frame + 1);
+        }
+        MaxMSPSetInputBuffers(ins, 2, hostFrames);
+        backend.render(outs, 1, hostFrames);
+        r.in0.insert(r.in0.end(), in0.begin(), in0.end());
+        r.out0.insert(r.out0.end(), out.begin(), out.end());
+    }
+    return r;
+}
+
+// The delay d at which out[t] == scale * in0[t - d] for every t >= d, or -1.
+int constantDelay(const Rendered& r, float scale, int maxDelay)
+{
+    for (int d = 0; d <= maxDelay; ++d) {
+        size_t t = d;
+        while (t < r.out0.size() && r.out0[t] == scale * r.in0[t - d]) ++t;
+        if (t == r.out0.size()) return d;
+    }
+    return -1;
+}
+
+} // namespace
+
+TEST_F(HostAudioTest, AdcPassesInputAtAConstantDelay) {
+    RegisterMaxAudioPrimitives();
+    for (int hostFrames : { 1, 63, 64, 512, 1000 }) {
+        SCOPED_TRACE(hostFrames);
+        auto r = renderWithInput(th_, *backend_, "0 adc play", hostFrames, 20000);
+        EXPECT_GE(constantDelay(r, 1.f, hostFrames + th_.rate.blockSize), 0);
+        backend_->stopAll();
+    }
+}
+
+TEST_F(HostAudioTest, AdcReadsTheChannelThroughAGraph) {
+    RegisterMaxAudioPrimitives();
+    const int maxDelay = 100 + th_.rate.blockSize;
+    auto r = renderWithInput(th_, *backend_, "1 adc 3 * .5 * play", 100, 20000);
+    EXPECT_GE(constantDelay(r, 3.f, maxDelay), 0);  // channel 1 is twice channel 0
+    backend_->stopAll();
+    r = renderWithInput(th_, *backend_, "2 adcn 1 at play", 100, 20000);
+    EXPECT_GE(constantDelay(r, 2.f, maxDelay), 0);
+}
+
+TEST_F(HostAudioTest, AdcChannelOutOfRangeFails) {
+    RegisterMaxAudioPrimitives();
+    P<Fun> fun;
+    ASSERT_TRUE(th_.compile("16 adc", fun, true));
+    EXPECT_THROW(fun->run(th_), int);
+}
+
+TEST_F(HostAudioTest, InterruptStopsEvaluationsNotPlayers) {
+    P<Fun> fun;
+    ASSERT_TRUE(th_.compile("440 0 sinosc .5 * play", fun, true));
+    fun->run(th_);
+    gInterrupt = true;
+    const float peak = renderPeak();
+    EXPECT_THROW(fun->run(th_), int);  // this thread is not rendering: interrupted
+    gInterrupt = false;
+    EXPECT_GT(peak, 0.4f);
+}
+
+namespace {
+
+// 4096 frames of `code` from a thread created at the current vm.ar block size.
+std::vector<float> renderAtBlockSize(MaxAudioBackend& backend, const char* code)
+{
+    Thread th;
+    P<Fun> fun;
+    EXPECT_TRUE(th.compile(code, fun, true));
+    fun->run(th);
+    std::vector<float> out(4096);
+    for (int t = 0; t < 4096; t += kFrames) {
+        float* outs[1] = { out.data() + t };
+        backend.render(outs, 1, kFrames);
+    }
+    backend.stopAll();
+    return out;
+}
+
+} // namespace
+
+TEST_F(HostAudioTest, BlockSizeDoesNotChangeTheSignal) {
+    const char* code = "1 setseed 300 0 sinosc 3 0 lfsaw 2 * 1k * 1.5k + .3 rlpf2 .5 * play";
+    auto at512 = renderAtBlockSize(*backend_, code);
+    vm.setBlockSize(128);
+    EXPECT_EQ(vm.ar.blockSize, 128);
+    EXPECT_EQ(vm.kr.blockSize, 1);
+    auto at128 = renderAtBlockSize(*backend_, code);
+    vm.setBlockSize(100);  // not a multiple of the control block: ignored
+    EXPECT_EQ(vm.ar.blockSize, 128);
+    vm.setBlockSize(kDefaultZBlockSize);
+    EXPECT_GT(*std::max_element(at512.begin(), at512.end()), 0.1f);
+    EXPECT_EQ(at512, at128);
 }

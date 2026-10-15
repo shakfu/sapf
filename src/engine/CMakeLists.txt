@@ -1,6 +1,7 @@
 option(SAPF_USE_RTAUDIO "Include RtAudio backend" ON)
 option(SAPF_USE_RTMIDI "Include RtMidi backend" ON)
 option(SAPF_USE_MANTA "Include Manta controller support" OFF)
+option(SAPF_USE_ALSA "Include the ALSA backend (Linux)" ON)
 
 # libsndfile for cross-platform audio file I/O (non-Apple only)
 if(NOT APPLE)
@@ -85,9 +86,16 @@ if(SAPF_USE_RTMIDI)
 endif()
 
 # libsndfile for non-Apple platforms
+# A host may supply its own libsndfile as SndFile::sndfile, such as a static PIC build; else pkg-config
 if(NOT APPLE AND SAPF_USE_LIBSNDFILE)
-	find_package(PkgConfig REQUIRED)
-	pkg_check_modules(SNDFILE IMPORTED_TARGET sndfile)
+	if(TARGET SndFile::sndfile)
+		set(SNDFILE_FOUND ON)
+		set(SAPF_SNDFILE SndFile::sndfile)
+	else()
+		find_package(PkgConfig REQUIRED)
+		pkg_check_modules(SNDFILE IMPORTED_TARGET sndfile)
+		set(SAPF_SNDFILE PkgConfig::SNDFILE)
+	endif()
 	if(SNDFILE_FOUND)
 		target_compile_definitions(sapf_engine PUBLIC SAPF_USE_LIBSNDFILE)
 		message(STATUS "libsndfile found - enabling cross-platform audio file I/O")
@@ -100,8 +108,19 @@ target_include_directories(
 	sapf_engine
 	PUBLIC
 	${SAPF_ROOT}/include
-	${SAPF_ROOT}/thirdparty/replxx/include
 )
+
+if(SAPF_REPLXX)
+	target_include_directories(sapf_engine PUBLIC ${SAPF_ROOT}/thirdparty/replxx/include)
+	target_link_libraries(sapf_engine PUBLIC replxx)
+else()
+	# changes the layout of Thread: every user of the headers must agree
+	target_compile_definitions(sapf_engine PUBLIC USE_REPLXX=0)
+endif()
+
+if(SAPF_USE_ALSA)
+	target_compile_definitions(sapf_engine PUBLIC SAPF_USE_ALSA)
+endif()
 
 if(SAPF_USE_RTAUDIO)
 	target_include_directories(sapf_engine PUBLIC ${SAPF_ROOT}/thirdparty/rtaudio)
@@ -122,7 +141,7 @@ if(NOT APPLE)
 	target_include_directories(
 		sapf_engine
 		PUBLIC
-		${CMAKE_BINARY_DIR}/thirdparty/fftw-3.3.10
+		${PROJECT_BINARY_DIR}/thirdparty/fftw-3.3.10
 	)
 endif()
 
@@ -149,9 +168,6 @@ else()
 		-Wunused-variable
 	)
 endif()
-
-# Base libraries
-target_link_libraries(sapf_engine PUBLIC replxx)
 
 if(SAPF_USE_MANTA)
 	target_link_libraries(sapf_engine PUBLIC manta)
@@ -182,17 +198,19 @@ if(APPLE)
 elseif(WIN32)
 	target_link_libraries(sapf_engine PUBLIC fftw3 winmm)
 	if(SAPF_USE_LIBSNDFILE AND SNDFILE_FOUND)
-		target_link_libraries(sapf_engine PUBLIC PkgConfig::SNDFILE)
+		target_link_libraries(sapf_engine PUBLIC ${SAPF_SNDFILE})
 	endif()
 elseif(UNIX)
 	find_package(PkgConfig REQUIRED)
-	pkg_check_modules(ALSA IMPORTED_TARGET alsa)
-	if(ALSA_FOUND)
-		target_link_libraries(sapf_engine PUBLIC PkgConfig::ALSA)
+	if(SAPF_USE_ALSA)
+		pkg_check_modules(ALSA IMPORTED_TARGET alsa)
+		if(ALSA_FOUND)
+			target_link_libraries(sapf_engine PUBLIC PkgConfig::ALSA)
+		endif()
 	endif()
 	target_link_libraries(sapf_engine PUBLIC fftw3 pthread m)
 	if(SAPF_USE_LIBSNDFILE AND SNDFILE_FOUND)
-		target_link_libraries(sapf_engine PUBLIC PkgConfig::SNDFILE)
+		target_link_libraries(sapf_engine PUBLIC ${SAPF_SNDFILE})
 	endif()
 endif()
 

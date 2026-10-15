@@ -5717,7 +5717,7 @@ static void sgram_(Thread& th, Prim* prim)
 	double* z = array->z();
 	spectrogram((int)n, z, 3200, 11, path, -dBfloor);
 	
-	{
+	if (vm.openFiles) {
 		char cmd[1100];
 		snprintf(cmd, 1100, "open \"%s\"", path);
 		system(cmd);

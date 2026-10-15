@@ -29,6 +29,8 @@
 VM vm;
 
 std::mutex gHelpMutex;
+std::atomic<bool> gInterrupt{false};
+thread_local bool gIgnoreInterrupt = false;
 
 std::atomic<int32_t> randSeedCounter = 77777;
 
@@ -532,6 +534,17 @@ void Thread::printLocals()
 void VM::setSampleRate(double inSampleRate)
 {
 	ar = Rate(inSampleRate, ar.blockSize);
+	kr = Rate(ar, kDefaultControlBlockSize);
+}
+
+void VM::setBlockSize(int inBlockSize)
+{
+	// kr runs one frame per kDefaultControlBlockSize audio frames, so its block must divide evenly
+	if (inBlockSize <= 0 || inBlockSize % kDefaultControlBlockSize) {
+		post("block size %d is not a positive multiple of %d; keeping %d\n", inBlockSize, kDefaultControlBlockSize, ar.blockSize);
+		return;
+	}
+	ar = Rate(ar.sampleRate, inBlockSize);
 	kr = Rate(ar, kDefaultControlBlockSize);
 }
 

@@ -261,6 +261,10 @@ void FFT::backward_real(double *inReal, double *inImag, double *outReal) {
 		this->in_out_real[2*i] = inReal[i];
 		this->in_out_real[2*i+1] = inImag[i];
 	}
+	// DC and Nyquist are real, and the Nyquist bin is zero, as in the Accelerate branch
+	this->in_out_real[1] = 0.;
+	this->in_out_real[this->n] = 0.;
+	this->in_out_real[this->n + 1] = 0.;
 	fftw_execute(this->backward_real_plan);
 	for(size_t i = 0; i < this->n; i++) {
 		outReal[i] = this->in_out_real[i] * scale;

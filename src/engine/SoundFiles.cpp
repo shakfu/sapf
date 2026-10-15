@@ -405,7 +405,7 @@ void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 
 	ExtAudioFileDispose(xaf);
 
-	if (openIt) {
+	if (openIt && vm.openFiles) {
 		char cmd[1100];
 		snprintf(cmd, 1100, "open \"%s\"", path);
 		system(cmd);
@@ -683,7 +683,7 @@ void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 
 	sf_close(sf);
 
-	if (openIt) {
+	if (openIt && vm.openFiles) {
 		// Cross-platform file opening
 #if defined(_WIN32)
 		char cmd[1100];

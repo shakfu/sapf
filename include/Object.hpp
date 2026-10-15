@@ -711,8 +711,8 @@ public:
 	void alloc(int64_t inCap);
 
 	int64_t size() const { return mSize; }
-    void setSize(size_t inSize) { mSize = inSize; }
-    void addSize(size_t inDelta) { mSize += inDelta; }
+    void setSize(int64_t inSize) { mSize = inSize; }
+    void addSize(int64_t inDelta) { mSize += inDelta; }  // signed: Gen::produce shrinks
 
 	void add(Arg value);
 	void put(int64_t i, Arg inItem);

@@ -10,7 +10,10 @@
 #include "test_common.hpp"
 #include "VM.hpp"
 #include "ErrorCodes.hpp"
+#include <chrono>
 #include <cmath>
+#include <future>
+#include <thread>
 
 // Test fixture for error handling tests
 class ErrorTest : public SapfTestBase {
@@ -222,3 +225,35 @@ TEST_F(ErrorTest, InfinityComparison) {
     EXPECT_DOUBLE_EQ(result.f, 1.0);  // inf == inf
 }
 
+
+//==============================================================================
+// Interrupt
+//==============================================================================
+
+// The code a host's evaluation thread runs; the error it ended with.
+static int runToError(Thread& th, const char* code) {
+    try {
+        P<Fun> fun;
+        if (th.compile(code, fun, true)) fun->apply(th);
+    } catch (int err) {
+        return err;
+    }
+    return errNone;
+}
+
+TEST_F(ErrorTest, InterruptStopsAListThatWouldRunForHours) {
+    gInterrupt = false;
+    auto done = std::async(std::launch::async, [this] { return runToError(th, "ord 1e12 N +/"); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    gInterrupt = true;
+    ASSERT_EQ(done.wait_for(std::chrono::seconds(2)), std::future_status::ready);
+    EXPECT_EQ(done.get(), errInterrupted);
+    gInterrupt = false;
+}
+
+TEST_F(ErrorTest, InterruptStopsAtTheNextOpcode) {
+    gInterrupt = true;
+    EXPECT_EQ(runToError(th, "1 2 +"), errInterrupted);
+    gInterrupt = false;
+    EXPECT_EQ(runToError(th, "1 2 +"), errNone);
+}

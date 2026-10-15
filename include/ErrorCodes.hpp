@@ -32,7 +32,8 @@ const int errStackUnderflow = -1010;
 const int errInconsistentInheritance = -1011;
 const int errUndefinedOperation = -1012;
 const int errUserQuit = -1013;
-const int kNumErrors = 14;
+const int errInterrupted = -1014;
+const int kNumErrors = 15;
 
 extern const char* errString[kNumErrors];
 

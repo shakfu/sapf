@@ -52,7 +52,7 @@ struct AUPlayer
 			ExtAudioFileDispose(xaf);
 			char cmd[1100];
 			snprintf(cmd, 1100, "open \"%s\"", path.c_str());
-			system(cmd);
+			if (vm.openFiles) system(cmd);
 		}
 	}
 	

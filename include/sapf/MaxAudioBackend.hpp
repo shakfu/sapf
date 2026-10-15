@@ -31,3 +31,10 @@ private:
 
 MaxAudioBackend& InstallMaxMSPBackend();
 void MaxMSPProcessAudio(float** outputs, int numChannels, int numFrames);
+
+// The host's input for the block it is about to render, read by `adc`. Call on the audio thread
+// before MaxMSPProcessAudio. Channels past numChannels read silence.
+void MaxMSPSetInputBuffers(const float* const* inputs, int numChannels, int numFrames);
+
+// Defines `adc` and `adcn`. Call after SapfEngine::initialize().
+void RegisterMaxAudioPrimitives();

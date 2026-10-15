@@ -50,21 +50,34 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 
-add_subdirectory(libmanta)
+# The engine library and FFTW only, for a host that embeds sapf and drives its audio (MaxAudioBackend)
+option(SAPF_ENGINE_ONLY "Build only the engine library" OFF)
+if(SAPF_ENGINE_ONLY)
+    set(SAPF_REPLXX OFF)  # normal variables: the options below keep their cached values (CMP0077)
+    set(SAPF_USE_RTAUDIO OFF)
+    set(SAPF_USE_RTMIDI OFF)
+    set(SAPF_USE_ALSA OFF)
+endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
-set(RTAUDIO_BUILD_TESTING OFF CACHE BOOL "Disable rtaudio tests" FORCE)
-add_subdirectory(thirdparty/rtaudio)
-set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "Disable rtmidi tests" FORCE)
-set(RTMIDI_TARGETNAME_UNINSTALL "rtmidi_uninstall" CACHE STRING "Unique uninstall target for rtmidi" FORCE)
-add_subdirectory(thirdparty/rtmidi)
 
-# Replxx for cross-platform line editing
-set(REPLXX_BUILD_EXAMPLES OFF CACHE BOOL "Disable replxx examples" FORCE)
-add_subdirectory(thirdparty/replxx)
+if(NOT SAPF_ENGINE_ONLY)
+    add_subdirectory(libmanta)
+    set(RTAUDIO_BUILD_TESTING OFF CACHE BOOL "Disable rtaudio tests" FORCE)
+    add_subdirectory(thirdparty/rtaudio)
+    set(RTMIDI_BUILD_TESTING OFF CACHE BOOL "Disable rtmidi tests" FORCE)
+    set(RTMIDI_TARGETNAME_UNINSTALL "rtmidi_uninstall" CACHE STRING "Unique uninstall target for rtmidi" FORCE)
+    add_subdirectory(thirdparty/rtmidi)
+endif()
+
+# Replxx for the REPL's line editing
+option(SAPF_REPLXX "Line editing with replxx" ON)
+if(SAPF_REPLXX)
+    set(REPLXX_BUILD_EXAMPLES OFF CACHE BOOL "Disable replxx examples" FORCE)
+    add_subdirectory(thirdparty/replxx)
+endif()
 
 # FFTW for non-Apple platforms (Linux and Windows)
 if(NOT APPLE)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static FFTW" FORCE)
     set(BUILD_TESTS OFF CACHE BOOL "Disable FFTW tests" FORCE)
     set(DISABLE_FORTRAN ON CACHE BOOL "Disable Fortran wrappers" FORCE)
     # Enable SSE2 for better performance on x86/x64
@@ -75,6 +88,9 @@ if(NOT APPLE)
 endif()
 
 add_subdirectory(src/engine)
+if(SAPF_ENGINE_ONLY)
+    return()
+endif()
 add_subdirectory(src/cli)
 
 # Testing

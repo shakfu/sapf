@@ -19,5 +19,5 @@
 const char* errString[kNumErrors] = { 
 	"halt", "failed", "indefinite operation", "wrong type", "out of range", "syntax", "internal bug",
 	"wrong state", "not found", "stack overflow", "stack underflow",
-	"inconsistent inheritance", "undefined operation", "user quit"
+	"inconsistent inheritance", "undefined operation", "user quit", "interrupted"
 };

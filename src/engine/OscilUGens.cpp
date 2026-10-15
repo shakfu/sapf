@@ -111,9 +111,10 @@ static void fillWaveTable(int n, Z* amps, int ampStride, Z* phases, int phaseStr
 	in.realp = real.data();
 	in.imagp = imag.data();
 
-	vDSP_ztocD(&in, 1, (DSPDoubleComplex*)polar.data(), 1, kWaveTableSize2);
-	vDSP_rectD(polar.data(), 1, rect.data(), 1, kWaveTableSize2);
-	vDSP_ctozD((DSPDoubleComplex*)rect.data(), 1, &in, 1, kWaveTableSize2);
+	// interleaved strides count doubles: 2 is contiguous
+	vDSP_ztocD(&in, 1, (DSPDoubleComplex*)polar.data(), 2, kWaveTableSize2);
+	vDSP_rectD(polar.data(), 2, rect.data(), 2, kWaveTableSize2);
+	vDSP_ctozD((DSPDoubleComplex*)rect.data(), 2, &in, 1, kWaveTableSize2);
 	rifft(kWaveTableSize, real.data(), imag.data(), table);
 }
 
@@ -1256,9 +1257,8 @@ struct SinOscPMFB : public ThreeInputUGen<SinOscPMFB>
 	Z freqmul;
 	Z y1;
 	
-	SinOscPMFB(Thread& th, Arg freq, Arg modphase, Arg phasefb) : ThreeInputUGen<SinOscPMFB>(th, freq, modphase, phasefb), freqmul(th.rate.radiansPerSample)
+	SinOscPMFB(Thread& th, Arg freq, Arg modphase, Arg phasefb) : ThreeInputUGen<SinOscPMFB>(th, freq, modphase, phasefb), phase(0.), freqmul(th.rate.radiansPerSample), y1(0.)
 	{
-		freqmul = th.rate.radiansPerSample;
 	}
 	
 	virtual const char* TypeName() const override { return "SinOscPMFB"; }

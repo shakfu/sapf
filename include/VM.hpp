@@ -36,7 +36,9 @@
 #include <climits>
 #include <mutex>
 
+#ifndef USE_REPLXX
 #define USE_REPLXX 1
+#endif
 
 #if USE_REPLXX
 extern "C" {
@@ -45,6 +47,16 @@ extern "C" {
 #endif
 
 extern std::mutex gHelpMutex;
+
+// Set by a host to stop a running evaluation: the interpreter throws errInterrupted at its next opcode
+// or list step. The host clears it before the next evaluation.
+extern std::atomic<bool> gInterrupt;
+// Set on a host's audio thread: an interrupt stops evaluations, not the players already sounding.
+extern thread_local bool gIgnoreInterrupt;
+inline void checkInterrupt()
+{
+	if (gInterrupt.load(std::memory_order_relaxed) && !gIgnoreInterrupt) throw errInterrupted;
+}
 
 class Unlocker
 {
@@ -325,6 +337,7 @@ class VM
 public:
 	const char* prelude_file;
 	const char* log_file;
+	bool openFiles = true;  // open written files and help files in their default app (system())
 	
 	P<GTable> builtins;
 		
@@ -406,6 +419,8 @@ public:
 	~VM();
 	
 	void setSampleRate(double inSampleRate);
+	
+	void setBlockSize(int inBlockSize);  // a positive multiple of kDefaultControlBlockSize; else unchanged
 	
 	V def(Arg key, Arg value);
 	V def(const char* name, Arg value);

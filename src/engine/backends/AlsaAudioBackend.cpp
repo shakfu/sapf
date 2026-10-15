@@ -1,6 +1,6 @@
 #include "sapf/backends/AlsaAudioBackend.hpp"
 
-#if defined(__linux__)
+#if defined(__linux__) && defined(SAPF_USE_ALSA)
 
 #include <alsa/asoundlib.h>
 #include <algorithm>
@@ -379,7 +379,7 @@ void AlsaAudioBackend::finalizePlayer(std::unique_ptr<Player>& player)
 			// Open the file with default application
 			char cmd[1100];
 			snprintf(cmd, sizeof(cmd), "xdg-open \"%s\" &", player->recordPath.c_str());
-			system(cmd);
+			if (vm.openFiles) system(cmd);
 		}
 	}
 #else

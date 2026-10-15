@@ -7,6 +7,8 @@
 #include "sapf/MaxAudioBackend.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <climits>
 #include <cstring>
 #include <mutex>
 
@@ -14,6 +16,52 @@ namespace {
 
 const int kMaxChannels = 32;
 std::mutex gMaxBackendMutex;
+
+const int kMaxInputs = 16;
+const int64_t kInputFrames = 1 << 14;  // a power of two; 0.34 s at 48 kHz
+
+// Host input, written by MaxMSPSetInputBuffers. Frame f of channel c is data[c][f % kInputFrames].
+struct InputFifo {
+	float data[kMaxInputs][kInputFrames] = {};
+	std::atomic<int64_t> written{0};
+	std::atomic<int> hostFrames{0};  // the last host block
+};
+InputFifo gInput;
+
+// One input channel as a signal. A render pulls a host block, in sapf blocks, so a stream starts a
+// host block and a sapf block behind the input written. A pull past the input written gets zeros for
+// the missing frames and stays that much further behind; a stream that falls out of the FIFO restarts.
+class AdcGen : public Gen
+{
+	int mChannel;
+	int64_t mPos = INT64_MIN;  // the next frame to read; INT64_MIN before the first pull
+
+public:
+	AdcGen(Thread& th, int channel)
+		: Gen(th, itemTypeZ, false)
+		, mChannel(channel)
+	{
+	}
+
+	const char* TypeName() const override { return "AdcGen"; }
+
+	void pull(Thread& th) override
+	{
+		int n = mBlockSize;
+		Z* out = mOut->fulfillz(n);
+		int64_t w = gInput.written.load(std::memory_order_acquire);
+		if (mPos == INT64_MIN || mPos < w - kInputFrames / 2) mPos = w - gInput.hostFrames.load(std::memory_order_relaxed) - n;
+		int avail = (int)std::clamp<int64_t>(w - mPos, 0, n);
+		const float* in = gInput.data[mChannel];
+		for (int i = 0; i < avail; ++i) {
+			int64_t f = mPos + i;
+			out[i] = f < 0 ? 0. : in[f & (kInputFrames - 1)];
+		}
+		std::fill(out + avail, out + n, 0.);
+		mPos += avail;
+		produce(0);
+	}
+};
 
 } // namespace
 
@@ -106,6 +154,12 @@ void MaxAudioBackend::render(float** outputs, int numChannels, int numFrames)
 	for (int c = 0; c < numChannels; ++c) {
 		std::memset(outputs[c], 0, static_cast<size_t>(numFrames) * sizeof(float));
 	}
+	// An interrupt is for the evaluation thread; the players keep sounding.
+	struct IgnoreInterrupt {
+		bool was = gIgnoreInterrupt;
+		IgnoreInterrupt() { gIgnoreInterrupt = true; }
+		~IgnoreInterrupt() { gIgnoreInterrupt = was; }
+	} ignoreInterrupt;
 
 	// Never block the host's audio thread: output silence while play()/stopAll() hold the lock.
 	std::unique_lock<std::mutex> lock(gMaxBackendMutex, std::try_to_lock);
@@ -190,4 +244,57 @@ void MaxMSPProcessAudio(float** outputs, int numChannels, int numFrames)
 		return;
 	}
 	backend->render(outputs, numChannels, numFrames);
+}
+
+void MaxMSPSetInputBuffers(const float* const* inputs, int numChannels, int numFrames)
+{
+	int64_t w = gInput.written.load(std::memory_order_relaxed);
+	for (int done = 0; done < numFrames;) {
+		int64_t at = (w + done) & (kInputFrames - 1);
+		int n = (int)std::min<int64_t>(numFrames - done, kInputFrames - at);
+		for (int c = 0; c < kMaxInputs; ++c) {
+			float* dst = &gInput.data[c][at];
+			if (c < numChannels && inputs[c]) {
+				std::memcpy(dst, inputs[c] + done, n * sizeof(float));
+			} else {
+				std::memset(dst, 0, n * sizeof(float));
+			}
+		}
+		done += n;
+	}
+	gInput.hostFrames.store(numFrames, std::memory_order_relaxed);
+	gInput.written.store(w + numFrames, std::memory_order_release);
+}
+
+static int popInput(Thread& th, const char* msg, int64_t lo)
+{
+	int64_t i = th.popInt(msg);
+	if (i < lo || i >= kMaxInputs + lo) {
+		post("%s must be %d to %d\n", msg, (int)lo, kMaxInputs - 1 + (int)lo);
+		throw errOutOfRange;
+	}
+	return (int)i;
+}
+
+static void adc_(Thread& th, Prim* prim)
+{
+	int channel = popInput(th, "adc : channel", 0);
+	th.push(new List(new AdcGen(th, channel)));
+}
+
+static void adcn_(Thread& th, Prim* prim)
+{
+	int n = popInput(th, "adcn : numChannels", 1);
+	P<List> s = new List(itemTypeV, n);
+	for (int c = 0; c < n; ++c) {
+		s->add(new List(new AdcGen(th, c)));
+	}
+	th.push(s);
+}
+
+void RegisterMaxAudioPrimitives()
+{
+	vm.addBifHelp("\n*** host audio input ***");
+	vm.defmcx("adc", 1, adc_, "(channel --> signal) the host's audio input channel, from 0.");
+	vm.def("adcn", 1, 1, adcn_, "(numChannels --> signals) the host's audio inputs 0 to numChannels - 1.");
 }

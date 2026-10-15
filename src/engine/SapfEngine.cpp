@@ -72,12 +72,14 @@ void SapfEngine::configure(const SapfEngineConfig& config)
 	if (config.sampleRate > 0.) {
 		vm.setSampleRate(config.sampleRate);
 	}
+	vm.setBlockSize(config.blockSize);
 	if (config.preludeFile) {
 		vm.prelude_file = config.preludeFile;
 	}
 	if (config.logFile) {
 		vm.log_file = config.logFile;
 	}
+	vm.openFiles = config.openFiles;
 }
 
 void SapfEngine::initialize()

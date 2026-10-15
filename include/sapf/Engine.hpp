@@ -4,9 +4,14 @@
 
 struct SapfEngineConfig {
 	double sampleRate = kDefaultSampleRate;
+	// Frames a signal UGen computes per pull: a multiple of kDefaultControlBlockSize. A host can match its
+	// own block, so a render's cost does not come in sapf-sized bursts.
+	int blockSize = kDefaultZBlockSize;
 	const char* preludeFile = nullptr;
 	const char* logFile = nullptr;
 	bool enableManta = true;
+	// Off for a host whose process must not fork a viewer, such as an audio plugin
+	bool openFiles = true;
 };
 
 class SapfEngine {
