@@ -1,16 +1,29 @@
 name: Build and Test
 
-on: [workflow_dispatch]
-  # push:
-  #   branches: [ main, master ]
-  # pull_request:
-  #   branches: [ main, master ]
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths-ignore: [ '**.md' ]
+  pull_request:
+    branches: [ main ]
+    paths-ignore: [ '**.md' ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Set short SHA
+        shell: bash
+        run: echo "SHORT_SHA=${SHA::7}" >> "$GITHUB_ENV"
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -24,7 +37,7 @@ jobs:
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: sapf-macos
+          name: sapf-macos-${{ env.SHORT_SHA }}
           path: |
             build/sapf
             build/libsapf.a
@@ -34,6 +47,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Set short SHA
+        shell: bash
+        run: echo "SHORT_SHA=${SHA::7}" >> "$GITHUB_ENV"
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Dependencies
         run: |
@@ -55,7 +74,7 @@ jobs:
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: sapf-linux
+          name: sapf-linux-${{ env.SHORT_SHA }}
           path: |
             build/sapf
             build/libsapf.a
@@ -65,6 +84,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Set short SHA
+        shell: bash
+        run: echo "SHORT_SHA=${SHA::7}" >> "$GITHUB_ENV"
+        env:
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install vcpkg and libsndfile
         run: |
@@ -84,7 +109,7 @@ jobs:
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: sapf-windows
+          name: sapf-windows-${{ env.SHORT_SHA }}
           path: |
             build/Release/sapf.exe
             build/Release/sapf.lib
