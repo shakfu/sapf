@@ -1,7 +1,7 @@
 /*
- * To use this from a Max external, call InstallMaxMSPBackend() during setup,
- * then invoke MaxMSPProcessAudio(outputs, numChannels, numFrames) inside your
- * MSP render callback to stream SAPF audio.
+ * Host-driven audio for any embedding (Max, Pd, VST3, CLAP): call InstallMaxMSPBackend()
+ * during setup, then MaxMSPProcessAudio(outputs, numChannels, numFrames) from the host's
+ * audio callback. render() never blocks or throws. See examples/host_audio.cpp.
  */
 
 #include "sapf/MaxAudioBackend.hpp"
@@ -63,7 +63,17 @@ void MaxAudioBackend::play(Thread& th, V& v)
 	v.o = nullptr;
 
 	Locker lock(&gMaxBackendMutex);
+	if (stopOnNextPlay_) {
+		players_.clear();
+		stopOnNextPlay_ = false;
+	}
 	players_.push_back(std::move(player));
+}
+
+void MaxAudioBackend::setStopOnNextPlay(bool on)
+{
+	Locker lock(&gMaxBackendMutex);
+	stopOnNextPlay_ = on;
 }
 
 void MaxAudioBackend::record(Thread& th, V& v, Arg filename)
@@ -93,12 +103,17 @@ void MaxAudioBackend::render(float** outputs, int numChannels, int numFrames)
 		return;
 	}
 
-	scratch_.resize(numFrames);
-
-	Locker lock(&gMaxBackendMutex);
 	for (int c = 0; c < numChannels; ++c) {
 		std::memset(outputs[c], 0, static_cast<size_t>(numFrames) * sizeof(float));
 	}
+
+	// Never block the host's audio thread: output silence while play()/stopAll() hold the lock.
+	std::unique_lock<std::mutex> lock(gMaxBackendMutex, std::try_to_lock);
+	if (!lock.owns_lock()) {
+		return;
+	}
+
+	scratch_.resize(numFrames);
 
 	auto it = players_.begin();
 	while (it != players_.end()) {
@@ -106,16 +121,27 @@ void MaxAudioBackend::render(float** outputs, int numChannels, int numFrames)
 		bool done = true;
 		int channels = std::min(player.numChannels, numChannels);
 
-		for (int ch = 0; ch < channels; ++ch) {
-			int frames = numFrames;
-			bool channelDone = player.in[ch].fill(player.th, frames, scratch_.data(), 1);
-			for (int i = 0; i < frames; ++i) {
-				outputs[ch][i] += scratch_[i];
+		// An exception must not unwind into the host's callback; drop the player instead.
+		try {
+			for (int ch = 0; ch < channels; ++ch) {
+				int frames = numFrames;
+				bool channelDone = player.in[ch].fill(player.th, frames, scratch_.data(), 1);
+				for (int i = 0; i < frames; ++i) {
+					outputs[ch][i] += scratch_[i];
+				}
+				done = done && channelDone;
 			}
-			if (frames < numFrames) {
-				// Remaining samples already zeroed.
+		} catch (int err) {
+			if (err <= -1000 && err > -1000 - kNumErrors) {
+				post("\nerror: %s\n", errString[-1000 - err]);
+			} else {
+				post("\nerror: %d\n", err);
 			}
-			done = done && channelDone;
+			post("exception in real time. stopping player.\n");
+			done = true;
+		} catch (...) {
+			post("\nexception in real time. stopping player.\n");
+			done = true;
 		}
 
 		player.done = done;

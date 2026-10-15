@@ -20,13 +20,51 @@
 #include "MathOps.hpp"
 #include "Opcode.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cstdarg>
+#include <vector>
+#include "sapf/Engine.hpp"
+
+namespace {
+std::atomic<SapfPostHook> gPostHook{nullptr};
+std::atomic<void*> gPostHookData{nullptr};
+}
+
+void SapfSetPostHook(SapfPostHook hook, void* userData)
+{
+	// Order so a concurrent post() never pairs a hook with the wrong data.
+	if (hook) {
+		gPostHookData.store(userData);
+		gPostHook.store(hook);
+	} else {
+		gPostHook.store(nullptr);
+		gPostHookData.store(nullptr);
+	}
+}
 
 void post(const char* fmt, ...)
 {
-    va_list vargs;
-    va_start(vargs, fmt);
-    vprintf(fmt, vargs);
+	va_list vargs;
+	va_start(vargs, fmt);
+	SapfPostHook hook = gPostHook.load();
+	if (!hook) {
+		vprintf(fmt, vargs);
+		va_end(vargs);
+		return;
+	}
+	va_list copy;
+	va_copy(copy, vargs);
+	char small[1024];
+	int n = vsnprintf(small, sizeof(small), fmt, vargs);
+	if (n >= (int)sizeof(small)) {
+		std::vector<char> big(n + 1);
+		vsnprintf(big.data(), big.size(), fmt, copy);
+		hook(big.data(), gPostHookData.load());
+	} else if (n > 0) {
+		hook(small, gPostHookData.load());
+	}
+	va_end(copy);
+	va_end(vargs);
 }
 
 void zprintf(std::string& out, const char* fmt, ...)

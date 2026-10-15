@@ -4,12 +4,32 @@
 
 ## High
 
+### Embedding (Pd external, VST3/CLAP plugin)
+
+- [ ] Support multiple engine instances per process
+  - Engine, audio backend and MIDI backend are process-wide singletons
+  - Two instances calling `MaxMSPProcessAudio` pull the same players, so each gets alternate blocks
+
+### Audio
+
+- [ ] Catch exceptions in the RtAudio render callback (`RtAudioBackend.cpp:248`)
+  - A generator error during playback unwinds into RtAudio; CoreAudio and host backends already catch
+
 ## Medium
 
 ### Features
 
 - [ ] Design and implement plugin architecture: for third-party extensibility needed
 - [ ] Add configuration file support - For complex setups
+
+### Embedding
+
+- [ ] Allow sample rate changes after `initialize()` (plugin activate, Pd DSP restart)
+- [ ] Feed host MIDI events into `MidiRouter::handleIncomingMessage` (plugins receive MIDI in `process`, not via RtMidi)
+- [ ] CLAP editor: verify on Windows and Linux hosts (CI only builds them)
+- [ ] CLAP editor: syntax highlighting (ImGui text field is plain)
+- [ ] CLAP: accept host MIDI note events (needs note ports and the `MidiRouter` item above)
+- [ ] Add audio input to the host backend (needed for effect plugins)
 
 ### Documentation
 
@@ -19,13 +39,22 @@
 
 ### Build System
 
-- [ ] Consider enabling CI on push/PR (currently manual workflow_dispatch only)
+- [ ] Cache vcpkg in the Windows CI job (clone and build add ~4 min per run)
 
 ### Code Quality
 
 - [ ] Add more unit tests: enable testing components in isolation
 
 ## Low
+
+### Embedding
+
+- [ ] Rename `MaxAudioBackend` / `InstallMaxMSPBackend` to host-neutral names (`HostAudioBackend`)
+- [ ] Remove allocation and deallocation from the host backend's audio thread (`scratch_.resize`, player erase)
+
+### Testing
+
+- [ ] Make `tests/run_test.cmake` safe under `ctest -j` (all tests share `tests/temp_input.txt` in the source tree)
 
 ### Performance Optimization
 
@@ -36,7 +65,6 @@
 
 ### Platform Support
 
-- [ ] Investigate Windows build support (libedit dependency resolved with replxx, needs testing)
 - [ ] Consider unified image format across platforms
 - [ ] Plan C++20 migration path for cleaner compiler intrinsics
 - [ ] Migrate to standard exceptions - Better debugging experience

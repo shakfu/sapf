@@ -41,3 +41,9 @@ add_sapf_unit_test(test_array_list test_array_list.cpp)
 
 # Error handling tests
 add_sapf_unit_test(test_errors test_errors.cpp)
+
+# Host-driven audio backend tests
+add_sapf_unit_test(test_host_audio test_host_audio.cpp)
+
+# Unit generator tests
+add_sapf_unit_test(test_ugens test_ugens.cpp)

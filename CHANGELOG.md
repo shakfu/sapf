@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **CLAP plugin** (`examples/clap/`) - Stereo instrument with a code editor on macOS, Windows and Linux, and loopback UDP input; each datagram is evaluated and the output sent back. Eval Block (Ctrl/Cmd+Return) evaluates the selection, the current line, or the multi-line `( )`, `[ ]` or `{ }` group it is in; Eval All (Ctrl/Cmd+Shift+Return) evaluates the whole editor; Stop (Ctrl+.) stops; Clear empties editor and log after confirming; Wrap (on by default) wraps long lines in both panes; Replace (off by default) makes an evaluation's first `play` stop the sounds already playing, via `MaxAudioBackend::setStopOnNextPlay`. Editor text, Wrap, Replace and UDP settings persist in host state. One instance per process. `test_clap_host` drives the built plugin headlessly as ctest `example_clap_plugin`; `make editor` opens it in `sapf_dev_host`, a minimal pugl + RtAudio host. See `examples/clap/README.md`.
+
+  The editor is Dear ImGui v1.93.0 in a pugl OpenGL view, both vendored under `thirdparty/`. pugl over GLFW because pugl embeds a child view in the host window and never pumps the host's event loop. Stop is Ctrl+. because AppKit consumes Cmd+. before any view sees it. `sapf-prelude.txt` is compiled in and loaded at startup, because a DAW does not inherit `SAPF_PRELUDE` from the shell; setting it still overrides.
+- **`SapfSetPostHook`** (`sapf/Engine.hpp`) - Routes `post()` output to a callback instead of stdout, so embedding hosts can show it. `post()` also gains its missing `va_end`.
+- **Host-driven audio example** (`examples/host_audio.cpp`) - Embeds sapf in a host that owns the audio callback (Pd external, VST3/CLAP plugin) and runs as ctest `example_host_audio`. `host_audio_module` builds the same file as a shared module, so a Linux build fails if non-PIC code reaches the engine.
+- **Tests** - `repl_quit` and `repl_unwritable_log` cover the piped-stdin REPL path; `tests/unit/test_host_audio.cpp` covers `MaxAudioBackend` playback and render-time errors.
 - **Cross-platform audio recording** via libsndfile for Linux and Windows
   - `AlsaAudioBackend` - Recording support using libsndfile (Linux)
   - `RtAudioBackend` - Recording support using libsndfile (Linux/Windows)
@@ -16,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Cross-platform MIDI testing** - MIDI smoke tests now run on all platforms
   - Updated test patterns to work with both CoreMidi and RtMidi backends
   - `midi_list`, `midi_start_stop`, `midi_debug` tests enabled on Linux/Windows
+  - On hosts without a MIDI subsystem (CI runners) they pass on the `RtMidi error` line and a clean exit; only macOS CI exercises a working MIDI backend
 - **Cross-platform sound file I/O** using libsndfile for Linux and Windows
   - `sfread` - Streaming audio file reader with seeking support
   - `sfwrite` - Audio file writer (WAV format)
@@ -45,10 +52,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **CI** runs on push and pull request to `main`, skips Markdown-only changes, and cancels superseded runs on the same ref. Artifact names end in the 7-character commit SHA. Linux installs X11 and OpenGL headers for the CLAP editor.
+- **Position-independent code** is enabled for the engine and vendored libraries, so the static engine links into shared-library hosts.
+- **`MaxAudioBackend::render` never blocks.** It uses `try_lock` and outputs one silent block if `play`/`stop` holds the lock, rather than waiting on the host's audio thread. A lock-free player queue would avoid the silent block; that is deferred.
 - **CI/CD workflow** - Full test coverage on all platforms
-  - Linux: All 264 tests including MIDI (was excluding `^midi_` pattern)
-  - Windows: All 264 tests including MIDI, libsndfile enabled via vcpkg
-  - macOS: All 264 tests (unchanged)
+  - Linux: All 284 tests including MIDI (was excluding `^midi_` pattern)
+  - Windows: All 284 tests including MIDI, libsndfile enabled via vcpkg
+  - macOS: All 284 tests (unchanged)
 - **ARCHITECTURE.md** - Added comprehensive cross-platform architecture section
   - Platform abstraction layer documentation
   - Audio backend architecture with fallback diagrams
@@ -81,6 +91,12 @@ The Object.hpp circular dependency (`V` <-> `Object`) was resolved using a stand
 
 ### Fixed
 
+- **`unspell` read uninitialized memory and could crash.** It constructed the result `String`, which hashes its buffer immediately, before filling the buffer.
+- **`dsf1` produced NaN when `coef` is exactly 1**, where both its normalization and its closed-form denominator are 0/0. It now uses the limit and, near the singularity, sums the series directly. A leftover debug `printf` that printed every sample to stdout is removed.
+- **`sapf-bif-examples.txt`** used the nonexistent word `midihz`; it is `nnhz`.
+- **REPL crash on any non-empty input when the log file cannot be opened.** The log path was built from `HOME` alone, so on Windows (no `HOME`) it became `(null)/sapf-log.txt`, `fopen` returned NULL, and the unchecked write aborted with `0xc0000409`; POSIX segfaulted the same way. Logging now falls back to `USERPROFILE` and is skipped when the file cannot be opened.
+- **`MaxAudioBackend` let generator exceptions unwind into the host's audio callback.** The failing player is now dropped, as in `CoreAudioBackend`.
+- **MIDI smoke tests** - The unquoted pattern `(gMIDIClient|RtMidi.initialized)` was split by CMake into an empty `EXPECTED_PATTERN`, so `midi_start_stop` passed on any output. Patterns are now quoted and matched against stdout and stderr, and accept the `RtMidi error` line on hosts without a MIDI subsystem (CI runners).
 - **CoreAudioBackend.cpp** - Fixed compilation error with mutex type
   - Changed `pthread_mutex_t` to `std::mutex` for consistency with `Locker` class
   - Replaced `Locker lock(&gPlayerMutex)` with `std::lock_guard<std::mutex>`

@@ -1,5 +1,5 @@
 
-.phony: all build clean test
+.phony: all build clean test editor
 
 
 all: build
@@ -12,6 +12,10 @@ build:
 
 test: build
 	@cd build && ctest --output-on-failure
+
+# Opens the CLAP plugin's editor in a minimal host, with audio to the default output.
+editor: build
+	@./build/examples/clap/sapf_dev_host
 
 clean:
 	@rm -rf build

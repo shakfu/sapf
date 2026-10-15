@@ -283,3 +283,16 @@ TEST_F(ArrayListTest, ArrayGrowth) {
     EXPECT_DOUBLE_EQ(arr->at(99).f, 99.0);
 }
 
+
+// unspell hashed its string buffer before filling it, reading uninitialized memory (crashed the CLI).
+TEST_F(ArrayListTest, UnspellListToString) {
+    V result = run("[97 98 99] unspell");
+    ASSERT_TRUE(result.isString());
+    EXPECT_STREQ(((String*)result.o())->cstr(), "abc");
+}
+
+TEST_F(ArrayListTest, UnspellSignalToString) {
+    V result = run("#[104 105] unspell");
+    ASSERT_TRUE(result.isString());
+    EXPECT_STREQ(((String*)result.o())->cstr(), "hi");
+}

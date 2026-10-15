@@ -853,7 +853,7 @@ ord 3 9 ifold
 
 ;; P example
 
-48 72 irands P = a midihz .2 1 steps 0 sinosc .2 * play
+48 72 irands P = a nnhz .2 1 steps 0 sinosc .2 * play
 
 [60 64 67 72] cyc a set
 

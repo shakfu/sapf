@@ -1499,9 +1499,17 @@ struct DSF1 : public FourInputUGen<DSF1>
 			Z a = *coef;
 			Z a2 = a*a;
 			Z an1 = pow(a, N1);
-			Z scale = (a - 1.)/(an1 - 1.);
-			out[i] = scale * (sin(p1) - a * sin(p1-p2) - an1 * (sin(p1 + N1*p2) - a * sin(p1 + N*p2)))/(1. + a2 - 2. * a * cos(p2));
-printf("%d %f\n", i, out[i]);
+			// Normalize by the sum of a^k (k = 0..N); at a = 1 the closed form is 0/0, the limit is 1/N1.
+			Z scale = fabs(a - 1.) < 1e-9 ? 1. / N1 : (a - 1.)/(an1 - 1.);
+			Z denom = 1. + a2 - 2. * a * cos(p2);
+			if (fabs(denom) > 1e-9) {
+				out[i] = scale * (sin(p1) - a * sin(p1-p2) - an1 * (sin(p1 + N1*p2) - a * sin(p1 + N*p2)))/denom;
+			} else {
+				// Closed form is 0/0 (a near 1, p2 near 0): sum the series directly.
+				Z sum = 0., ak = 1.;
+				for (Z k = 0.; k < N1; k += 1.) { sum += ak * sin(p1 + k*p2); ak *= a; }
+				out[i] = scale * sum;
+			}
 			Z ffreq = *freq * freqmul;
 			Z f1 = ffreq * *carRatio;
 			Z f2 = ffreq * *modRatio;

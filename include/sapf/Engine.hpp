@@ -30,4 +30,9 @@ private:
 };
 
 SapfEngine& GetSapfEngine();
+
+// Receives each formatted post() message instead of stdout; nullptr restores stdout.
+// Called from any thread that posts, including audio threads.
+typedef void (*SapfPostHook)(const char* text, void* userData);
+void SapfSetPostHook(SapfPostHook hook, void* userData);
 const char* SapfGetVersionString();

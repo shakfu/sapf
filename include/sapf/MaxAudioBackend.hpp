@@ -17,12 +17,16 @@ public:
 
 	void render(float** outputs, int numChannels, int numFrames);
 
+	// The next play() first stops all players, so a new evaluation replaces the sound of the last.
+	void setStopOnNextPlay(bool on);
+
 private:
 	struct Player;
 	void removeFinishedLocked();
 
 	std::vector<std::unique_ptr<Player>> players_;
 	std::vector<float> scratch_;
+	bool stopOnNextPlay_ = false;
 };
 
 MaxAudioBackend& InstallMaxMSPBackend();
