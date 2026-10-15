@@ -107,6 +107,18 @@ add_test(
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_test.cmake
 )
 
+# REPL must survive an unwritable log file (fopen returns NULL)
+add_test(
+    NAME repl_unwritable_log
+    COMMAND ${CMAKE_COMMAND}
+        -DSAPF_BINARY=$<TARGET_FILE:sapf>
+        -DINPUT=1
+        -DEXPECTED_PATTERN=good\ bye
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_test.cmake
+)
+set_tests_properties(repl_unwritable_log PROPERTIES
+    ENVIRONMENT "SAPF_LOG=${CMAKE_BINARY_DIR}/no-such-dir/sapf-log.txt")
+
 # MIDI smoke tests (verify MIDI ops don't crash)
 # These tests work with both CoreMidi (macOS) and RtMidi (Linux/Windows).
 # Hosts without a MIDI subsystem (e.g. CI runners) pass via the "RtMidi error" branch.

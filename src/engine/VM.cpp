@@ -263,8 +263,8 @@ void Thread::getLine()
 	if (origLen > 0) {
 		replxx_history_add(replxx, input);
 		replxx_history_save(replxx, historyfilename);
-		if (logfilename) {
-			FILE* logfile = fopen(logfilename, "a");
+		FILE* logfile = logfilename ? fopen(logfilename, "a") : nullptr;
+		if (logfile) {
 			logTimestamp(logfile);
 			fwrite(input, 1, origLen, logfile);
 			fputc('\n', logfile);
