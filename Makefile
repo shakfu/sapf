@@ -1,5 +1,5 @@
 
-.phony: all build clean test editor
+.PHONY: all build clean test editor
 
 
 all: build
