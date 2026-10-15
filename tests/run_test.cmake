@@ -2,7 +2,7 @@
 # Variables:
 #   SAPF_BINARY - path to sapf executable
 #   INPUT - sapf code to execute
-#   EXPECTED_PATTERN - regex pattern to match in output (optional)
+#   EXPECTED_PATTERN - regex pattern to match in stdout+stderr (optional)
 
 # Create temp input file with the test input and quit command
 set(TEMP_INPUT "${CMAKE_CURRENT_LIST_DIR}/temp_input.txt")
@@ -28,8 +28,8 @@ endif()
 
 # Check output pattern if specified
 if(DEFINED EXPECTED_PATTERN)
-    if(NOT OUTPUT MATCHES "${EXPECTED_PATTERN}")
-        message(FATAL_ERROR "Expected pattern '${EXPECTED_PATTERN}' not found in output:\n${OUTPUT}")
+    if(NOT "${OUTPUT}${ERROR_OUTPUT}" MATCHES "${EXPECTED_PATTERN}")
+        message(FATAL_ERROR "Expected pattern '${EXPECTED_PATTERN}' not found in output:\n${OUTPUT}\nError:\n${ERROR_OUTPUT}")
     endif()
 endif()
 

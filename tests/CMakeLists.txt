@@ -97,14 +97,25 @@ add_test(
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
+# REPL smoke test: piped stdin, then quit. Exercises the exit path the MIDI tests share.
+add_test(
+    NAME repl_quit
+    COMMAND ${CMAKE_COMMAND}
+        -DSAPF_BINARY=$<TARGET_FILE:sapf>
+        -DINPUT=
+        -DEXPECTED_PATTERN=good\ bye
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_test.cmake
+)
+
 # MIDI smoke tests (verify MIDI ops don't crash)
-# These tests work with both CoreMidi (macOS) and RtMidi (Linux/Windows)
+# These tests work with both CoreMidi (macOS) and RtMidi (Linux/Windows).
+# Hosts without a MIDI subsystem (e.g. CI runners) pass via the "RtMidi error" branch.
 add_test(
     NAME midi_list
     COMMAND ${CMAKE_COMMAND}
         -DSAPF_BINARY=$<TARGET_FILE:sapf>
         -DINPUT=midiList
-        -DEXPECTED_PATTERN=midi.source
+        "-DEXPECTED_PATTERN=(midi sources|RtMidi error)"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_test.cmake
 )
 
@@ -113,7 +124,7 @@ add_test(
     COMMAND ${CMAKE_COMMAND}
         -DSAPF_BINARY=$<TARGET_FILE:sapf>
         -DINPUT=midiStart\ midiStop
-        -DEXPECTED_PATTERN=(gMIDIClient|RtMidi.initialized)
+        "-DEXPECTED_PATTERN=(gMIDIClient|RtMidi initialized|RtMidi error)"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_test.cmake
 )
 
