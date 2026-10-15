@@ -25,11 +25,12 @@ struct InputFifo {
 	float data[kMaxInputs][kInputFrames] = {};
 	std::atomic<int64_t> written{0};
 	std::atomic<int> hostFrames{0};  // the last host block
+	std::atomic<int> lead{0};        // MaxMSPSetInputLead
 };
 InputFifo gInput;
 
 // One input channel as a signal. A render pulls a host block, in sapf blocks, so a stream starts a
-// host block and a sapf block behind the input written. A pull past the input written gets zeros for
+// host block, a sapf block and the host's lead behind the input written. A pull past the input written gets zeros for
 // the missing frames and stays that much further behind; a stream that falls out of the FIFO restarts.
 class AdcGen : public Gen
 {
@@ -50,7 +51,7 @@ public:
 		int n = mBlockSize;
 		Z* out = mOut->fulfillz(n);
 		int64_t w = gInput.written.load(std::memory_order_acquire);
-		if (mPos == INT64_MIN || mPos < w - kInputFrames / 2) mPos = w - gInput.hostFrames.load(std::memory_order_relaxed) - n;
+		if (mPos == INT64_MIN || mPos < w - kInputFrames / 2) mPos = w - gInput.hostFrames.load(std::memory_order_relaxed) - gInput.lead.load(std::memory_order_relaxed) - n;
 		int avail = (int)std::clamp<int64_t>(w - mPos, 0, n);
 		const float* in = gInput.data[mChannel];
 		for (int i = 0; i < avail; ++i) {
@@ -264,6 +265,11 @@ void MaxMSPSetInputBuffers(const float* const* inputs, int numChannels, int numF
 	}
 	gInput.hostFrames.store(numFrames, std::memory_order_relaxed);
 	gInput.written.store(w + numFrames, std::memory_order_release);
+}
+
+void MaxMSPSetInputLead(int frames)
+{
+	gInput.lead.store(std::max(0, frames), std::memory_order_relaxed);
 }
 
 static int popInput(Thread& th, const char* msg, int64_t lo)

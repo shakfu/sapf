@@ -198,3 +198,38 @@ TEST_F(HostAudioTest, BlockSizeDoesNotChangeTheSignal) {
     EXPECT_GT(*std::max_element(at512.begin(), at512.end()), 0.1f);
     EXPECT_EQ(at512, at128);
 }
+
+TEST_F(HostAudioTest, AdcLeadCoversARenderAhead) {
+    // A render thread keeps `ahead` host blocks rendered before their input arrives.
+    RegisterMaxAudioPrimitives();
+    const int hostFrames = 128, ahead = 4;
+    MaxMSPSetInputLead(ahead * hostFrames);
+    P<Fun> fun;
+    ASSERT_TRUE(th_.compile("0 adc play", fun, true));
+    fun->run(th_);
+    static int64_t frame = 1 << 20;  // apart from the other tests' input
+    std::vector<float> in(hostFrames), out(hostFrames);
+    const float* ins[1] = { in.data() };
+    float* outs[1] = { out.data() };
+    Rendered r;
+    auto write = [&] {
+        for (int i = 0; i < hostFrames; ++i) in[i] = float(++frame);
+        MaxMSPSetInputBuffers(ins, 1, hostFrames);
+        r.in0.insert(r.in0.end(), in.begin(), in.end());
+    };
+    auto render = [&] {
+        backend_->render(outs, 1, hostFrames);
+        r.out0.insert(r.out0.end(), out.begin(), out.end());
+    };
+    write();
+    for (int b = 0; b < ahead; ++b) render();  // the FIFO fills
+    for (int b = 0; b < 200; ++b) {
+        write();
+        render();
+    }
+    MaxMSPSetInputLead(0);
+    // output frame t holds input frame t - delay: the input list is offset by the prefill
+    r.in0.insert(r.in0.begin(), size_t(ahead * hostFrames), 0.f);
+    int delay = constantDelay(r, 1.f, 2 * hostFrames + ahead * hostFrames + th_.rate.blockSize);
+    EXPECT_GE(delay, 0);
+}
