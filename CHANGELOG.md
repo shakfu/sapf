@@ -58,6 +58,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **`setseed` reaches the threads a thread starts.** A player that `play` starts, and a `go` thread, seeded themselves from the clock, so `setseed` never fixed noise UGens' values or `ola` and `oltx` voices, which run on the player's thread: the same seeded code sounded different each time. A new thread now seeds itself from its parent's generator state and a count of the threads started since the parent was seeded. The parent's own numbers do not move, and an unseeded thread still starts from the clock, so code without `setseed` varies as before.
+
 - **CI** runs on push and pull request to `main`, skips Markdown-only changes, and cancels superseded runs on the same ref. Artifact names end in the 7-character commit SHA. Linux installs X11 and OpenGL headers for the CLAP editor.
 - **Position-independent code** is enabled for the engine and vendored libraries, so the static engine links into shared-library hosts.
 - **`MaxAudioBackend::render` never blocks.** It uses `try_lock` and outputs one silent block if `play`/`stop` holds the lock, rather than waiting on the host's audio thread. A lock-free player queue would avoid the silent block; that is deferred.

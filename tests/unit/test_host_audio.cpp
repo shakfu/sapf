@@ -233,3 +233,54 @@ TEST_F(HostAudioTest, AdcLeadCoversARenderAhead) {
     int delay = constantDelay(r, 1.f, 2 * hostFrames + ahead * hostFrames + th_.rate.blockSize);
     EXPECT_GE(delay, 0);
 }
+
+namespace {
+
+// 2048 frames of what `code` plays, evaluated on `th`
+std::vector<float> renderCode(Thread& th, MaxAudioBackend& backend, const char* code)
+{
+    P<Fun> fun;
+    EXPECT_TRUE(th.compile(code, fun, true));
+    fun->run(th);
+    std::vector<float> out(2048);
+    for (int t = 0; t < 2048; t += kFrames) {
+        float* outs[1] = { out.data() + t };
+        backend.render(outs, 1, kFrames);
+    }
+    backend.stopAll();
+    return out;
+}
+
+double popNumber(Thread& th, const char* code)
+{
+    P<Fun> fun;
+    EXPECT_TRUE(th.compile(code, fun, true));
+    fun->run(th);
+    return th.pop().asFloat();
+}
+
+} // namespace
+
+TEST_F(HostAudioTest, SetseedFixesWhatPlayersDraw) {
+    // noise draws from the player's thread; ola's voices run on it too
+    for (const char* code : { "1 setseed .1 white play",
+                              "1 setseed \\[0 1 rand 300 * 200 + 0 sinosc .1 * 600 N] .01 .02 randz 1 1 ola play" }) {
+        SCOPED_TRACE(code);
+        auto a = renderCode(th_, *backend_, code);
+        auto b = renderCode(th_, *backend_, code);
+        EXPECT_GT(*std::max_element(a.begin(), a.end()), 0.f);
+        EXPECT_EQ(a, b);
+    }
+    // without setseed each evaluation draws anew
+    auto a = renderCode(th_, *backend_, ".1 white play");
+    auto b = renderCode(th_, *backend_, ".1 white play");
+    EXPECT_NE(a, b);
+}
+
+TEST_F(HostAudioTest, StartingAPlayerLeavesTheParentsNumbers) {
+    // the noise UGen seeds itself from this thread when made, played or not; play itself must not draw
+    const double alone = popNumber(th_, "1 setseed .1 white pop 0 1 rand");
+    const double afterPlay = popNumber(th_, "1 setseed .1 white play 0 1 rand");
+    backend_->stopAll();
+    EXPECT_EQ(alone, afterPlay);
+}

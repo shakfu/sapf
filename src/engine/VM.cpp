@@ -76,7 +76,7 @@ Thread::Thread(const Thread& inParent)
 #endif
     line(NULL)
 {
-	rgen.init(timeseed());
+	rgen.init(inParent.rgen.fork());  // setseed reaches players, ola voices and go threads
 }
 
 Thread::Thread(const Thread& inParent, P<Fun> const& inFun)
@@ -91,7 +91,7 @@ Thread::Thread(const Thread& inParent, P<Fun> const& inFun)
 #endif
     line(NULL)
 {
-	rgen.init(timeseed());
+	rgen.init(inParent.rgen.fork());  // setseed reaches players, ola voices and go threads
 }
 
 Thread::~Thread() {}

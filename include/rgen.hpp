@@ -79,8 +79,12 @@ inline double itof2(uint32_t i, double a)
 struct RGen
 {
 	uint64_t s[2];
+	mutable uint64_t forks = 0;  // seeds fork() has given since init
 	
 	void init(int64_t seed);
+	// A seed for a thread this one starts, from this state and the count so far: after the same seed,
+	// a thread starts the same threads, and starting them leaves its own numbers as they were.
+	int64_t fork() const { return Hash64(int64_t(s[0]) + Hash64(int64_t(s[1]) + int64_t(++forks))); }
 	int64_t trand();
 	    
 	double drand(); // 0 .. 1
@@ -107,6 +111,7 @@ inline void RGen::init(int64_t seed)
 {
 	s[0] = Hash64(seed + 0x43a68b0d0492ba51LL);
 	s[1] = Hash64(seed + 0x56e376c6e7c29504LL);
+	forks = 0;
 }
 
 inline int64_t RGen::trand()
