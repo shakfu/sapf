@@ -54,14 +54,14 @@ void post(const char* fmt, ...)
 	}
 	va_list copy;
 	va_copy(copy, vargs);
-	char small[1024];
-	int n = vsnprintf(small, sizeof(small), fmt, vargs);
-	if (n >= (int)sizeof(small)) {
+	char buf[1024];
+	int n = vsnprintf(buf, sizeof(buf), fmt, vargs);
+	if (n >= (int)sizeof(buf)) {
 		std::vector<char> big(n + 1);
 		vsnprintf(big.data(), big.size(), fmt, copy);
 		hook(big.data(), gPostHookData.load());
 	} else if (n > 0) {
-		hook(small, gPostHookData.load());
+		hook(buf, gPostHookData.load());
 	}
 	va_end(copy);
 	va_end(vargs);
