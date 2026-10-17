@@ -52,4 +52,7 @@ add_sapf_unit_test(test_ugens test_ugens.cpp)
 add_sapf_unit_test(test_accelerate_compat test_accelerate_compat.cpp)
 
 # SapfEngineConfig::openFiles
-add_sapf_unit_test(test_open_files test_open_files.cpp)
+# POSIX only: Windows opens files with the cmd builtin `start`, which a PATH stub cannot intercept.
+if(NOT WIN32)
+    add_sapf_unit_test(test_open_files test_open_files.cpp)
+endif()
