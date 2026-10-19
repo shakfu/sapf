@@ -115,17 +115,9 @@ void SapfEngine::configureLogFile()
 	if (vm.log_file) {
 		return;
 	}
-	vm.log_file = getenv("SAPF_LOG");
-	if (!vm.log_file) {
-		const char* home_dir = getenv("HOME");
-#ifdef _WIN32
-		if (!home_dir) home_dir = getenv("USERPROFILE");
-#endif
-		if (!home_dir) return; // no home directory: logging disabled
-		static char logfilename[PATH_MAX];
-		snprintf(logfilename, PATH_MAX, "%s/sapf-log.txt", home_dir);
-		vm.log_file = logfilename;
-	}
+	// No log unless SAPF_LOG names a file
+	const char* env = getenv("SAPF_LOG");
+	if (env && *env) vm.log_file = env;
 }
 
 void SapfEngine::startMantaEventLoop() const

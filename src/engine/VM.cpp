@@ -264,7 +264,7 @@ void Thread::getLine()
 	size_t origLen = strlen(input);
 	if (origLen > 0) {
 		replxx_history_add(replxx, input);
-		replxx_history_save(replxx, historyfilename);
+		if (historyfilename[0]) replxx_history_save(replxx, historyfilename);
 		FILE* logfile = logfilename ? fopen(logfilename, "a") : nullptr;
 		if (logfile) {
 			logTimestamp(logfile);
@@ -357,26 +357,14 @@ void Thread::repl(FILE* infile, const char* inLogfilename)
 	// Initialize replxx
 	replxx = replxx_init();
 
-	// Set up history file path
+	// History stays in memory unless SAPF_HISTORY names a file
 	const char* envHistoryFileName = getenv("SAPF_HISTORY");
-	if (envHistoryFileName) {
-		snprintf(historyfilename, PATH_MAX, "%s", envHistoryFileName);
-	} else {
-		const char* homeDir = getenv("HOME");
-#ifdef _WIN32
-		if (!homeDir) homeDir = getenv("USERPROFILE");
-#endif
-		if (homeDir) {
-			snprintf(historyfilename, PATH_MAX, "%s/sapf-history.txt", homeDir);
-		} else {
-			snprintf(historyfilename, PATH_MAX, "sapf-history.txt");
-		}
-	}
+	snprintf(historyfilename, PATH_MAX, "%s", envHistoryFileName ? envHistoryFileName : "");
 
 	// Configure replxx
 	replxx_set_max_history_size(replxx, 800);
 	replxx_set_unique_history(replxx, 1);
-	replxx_history_load(replxx, historyfilename);
+	if (historyfilename[0]) replxx_history_load(replxx, historyfilename);
 #endif
 
 	fflush(infile);
@@ -435,7 +423,7 @@ void Thread::repl(FILE* infile, const char* inLogfilename)
 
 #if USE_REPLXX
 	// Save history and clean up
-	replxx_history_save(replxx, historyfilename);
+	if (historyfilename[0]) replxx_history_save(replxx, historyfilename);
 	if (currentLine) {
 		free(currentLine);  // We use malloc to add newline
 		currentLine = nullptr;

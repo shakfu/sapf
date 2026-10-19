@@ -119,6 +119,15 @@ add_test(
 set_tests_properties(repl_unwritable_log PROPERTIES
     ENVIRONMENT "SAPF_LOG=${CMAKE_BINARY_DIR}/no-such-dir/sapf-log.txt")
 
+# With SAPF_HISTORY and SAPF_LOG unset, the REPL writes no files to HOME or the working directory
+add_test(
+    NAME repl_no_files
+    COMMAND ${CMAKE_COMMAND}
+        -DSAPF_BINARY=$<TARGET_FILE:sapf>
+        -DDIR=${CMAKE_BINARY_DIR}/repl-no-files
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_no_files_test.cmake
+)
+
 # MIDI smoke tests (verify MIDI ops don't crash)
 # These tests work with both CoreMidi (macOS) and RtMidi (Linux/Windows).
 # Hosts without a MIDI subsystem (e.g. CI runners) pass via the "RtMidi error" branch.

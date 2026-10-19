@@ -58,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **The REPL writes no files unless asked.** History stays in memory and there is no log. `SAPF_HISTORY` and `SAPF_LOG` name the files; set them to keep the old behaviour. The defaults were `~/sapf-history.txt` and `~/sapf-log.txt`, and the history went to the current directory when `HOME` was unset.
 - **`setseed` reaches the threads a thread starts.** A player that `play` starts, and a `go` thread, seeded themselves from the clock, so `setseed` never fixed noise UGens' values or `ola` and `oltx` voices, which run on the player's thread: the same seeded code sounded different each time. A new thread now seeds itself from its parent's generator state and a count of the threads started since the parent was seeded. The parent's own numbers do not move, and an unseeded thread still starts from the clock, so code without `setseed` varies as before.
 
 - **CI** runs on push and pull request to `main`, skips Markdown-only changes, and cancels superseded runs on the same ref. Artifact names end in the 7-character commit SHA. Linux installs X11 and OpenGL headers for the CLAP editor.

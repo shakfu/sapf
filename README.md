@@ -99,8 +99,8 @@ export SAPF_SPECTROGRAMS="$HOME/sapf-files/spectrograms"
 | `SAPF_PRELUDE` | Code file loaded before entering the REPL |
 | `SAPF_RECORDINGS` | Directory for output sound files |
 | `SAPF_SPECTROGRAMS` | Directory for spectrogram images |
-| `SAPF_HISTORY` | Command line history for recall at runtime |
-| `SAPF_LOG` | Log of command line inputs |
+| `SAPF_HISTORY` | Command line history for recall at runtime. Unset: history is kept in memory only |
+| `SAPF_LOG` | Log of command line inputs. Unset: no log |
 | `SAPF_EXAMPLES` | Path to examples file |
 
 ## Command Line Options
