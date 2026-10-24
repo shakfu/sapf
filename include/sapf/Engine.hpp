@@ -40,4 +40,7 @@ SapfEngine& GetSapfEngine();
 // Called from any thread that posts, including audio threads.
 typedef void (*SapfPostHook)(const char* text, void* userData);
 void SapfSetPostHook(SapfPostHook hook, void* userData);
+// Any thread: the position the mouse UGens (mousex, xmousey, ...) read, each from 0 to 1, clamped. On
+// macOS the screen's mouse overwrites it within 17 ms.
+void SapfSetMouse(float x, float y);
 const char* SapfGetVersionString();

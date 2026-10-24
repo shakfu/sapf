@@ -1,6 +1,7 @@
 // Host-driven audio backend (MaxAudioBackend), as used by Pd/VST3/CLAP embeddings.
 #include <gtest/gtest.h>
 #include "test_common.hpp"
+#include "sapf/Engine.hpp"
 #include "sapf/MaxAudioBackend.hpp"
 #include "VM.hpp"
 #include <algorithm>
@@ -284,3 +285,33 @@ TEST_F(HostAudioTest, StartingAPlayerLeavesTheParentsNumbers) {
     backend_->stopAll();
     EXPECT_EQ(alone, afterPlay);
 }
+
+#if !defined(__APPLE__)  // on macOS the screen's mouse overwrites the position within 17 ms
+
+TEST_F(HostAudioTest, MouseWordsReadTheHostsPosition) {
+    SapfSetMouse(.25f, .75f);
+    P<Fun> fun;
+    ASSERT_TRUE(th_.compile("0 4 mousex1 0 4 mousey1 1 100 xmousex1", fun, true));
+    fun->run(th_);
+    EXPECT_NEAR(th_.popFloat("xmousex1"), std::sqrt(10.), 1e-5);  // 100^.25
+    EXPECT_NEAR(th_.popFloat("mousey1"), 3., 1e-6);
+    EXPECT_NEAR(th_.popFloat("mousex1"), 1., 1e-6);
+
+    SapfSetMouse(2.f, -1.f);  // clamped to 1 and 0
+    ASSERT_TRUE(th_.compile("0 4 mousex1 0 4 mousey1", fun, true));
+    fun->run(th_);
+    EXPECT_NEAR(th_.popFloat("mousey1"), 0., 1e-6);
+    EXPECT_NEAR(th_.popFloat("mousex1"), 4., 1e-6);
+    SapfSetMouse(.5f, .5f);
+}
+
+TEST_F(HostAudioTest, MouseSignalPlaysTheHostsPosition) {
+    SapfSetMouse(.25f, .5f);
+    P<Fun> fun;
+    ASSERT_TRUE(th_.compile("0 2 mousex play", fun, true));
+    fun->run(th_);
+    EXPECT_NEAR(renderPeak(), .5f, 1e-5);  // starts at the position, so no lag to settle
+    SapfSetMouse(.5f, .5f);
+}
+
+#endif

@@ -23,6 +23,7 @@
 #include <float.h>
 #include <vector>
 #include <algorithm>
+#include <atomic>
 #include "sapf/AccelerateCompat.hpp"
 
 
@@ -4302,13 +4303,24 @@ static void ifold_(Thread& th, Prim* prim)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// The mouse UGens read a position from 0 to 1 on each axis. On macOS a thread polls the screen's mouse;
+// elsewhere a host sets it with SapfSetMouse, and it stays at the middle until then.
+struct MouseUGenGlobalState {
+	std::atomic<float> mouseX{.5f}, mouseY{.5f};
+	std::atomic<bool> mouseButton{false};
+} gMouseUGenGlobals;
+
+static inline Z mouseX() { return gMouseUGenGlobals.mouseX.load(std::memory_order_relaxed); }
+static inline Z mouseY() { return gMouseUGenGlobals.mouseY.load(std::memory_order_relaxed); }
+
+void SapfSetMouse(float x, float y)
+{
+	gMouseUGenGlobals.mouseX.store(std::clamp(x, 0.f, 1.f), std::memory_order_relaxed);
+	gMouseUGenGlobals.mouseY.store(std::clamp(y, 0.f, 1.f), std::memory_order_relaxed);
+}
+
 #if defined(__APPLE__)
 #include <Carbon/Carbon.h>
-
-struct MouseUGenGlobalState {
-	float mouseX, mouseY;
-	bool mouseButton;
-} gMouseUGenGlobals;
 
 static void* gstate_update_func(void* arg)
 {
@@ -4323,14 +4335,15 @@ static void* gstate_update_func(void* arg)
 		HICoordinateSpace space = 2;
 		HIGetMousePosition(space, nullptr, &point);
 
-		gstate->mouseX = point.x * rscreenWidth; //(float)p.h * rscreenWidth;
-		gstate->mouseY = 1. - point.y * rscreenHeight; //(float)p.v * rscreenHeight;
-		gstate->mouseButton = GetCurrentButtonState();
+		gstate->mouseX.store(point.x * rscreenWidth, std::memory_order_relaxed); //(float)p.h * rscreenWidth;
+		gstate->mouseY.store(1. - point.y * rscreenHeight, std::memory_order_relaxed); //(float)p.v * rscreenHeight;
+		gstate->mouseButton.store(GetCurrentButtonState(), std::memory_order_relaxed);
 		usleep(17000);
 	}
 
 	return 0;
 }
+#endif // __APPLE__
 
 Z gMouseLagTime = .1;
 Z gMouseLagMul = log001 / gMouseLagTime;
@@ -4351,12 +4364,12 @@ struct MouseX : public TwoInputUGen<MouseX>
 	{
 		if (_once) {
 			_once = false;
-			_y1 = *lo + gMouseUGenGlobals.mouseX * (*hi - *lo);
+			_y1 = *lo + mouseX() * (*hi - *lo);
 		}
 		Z y1 = _y1;
 		Z b1 = _b1;
 		for (int i = 0; i < n; ++i) {
-			Z y0 = *lo + gMouseUGenGlobals.mouseX * (*hi - *lo);
+			Z y0 = *lo + mouseX() * (*hi - *lo);
 			out[i] = y1 = y0 + b1 * (y1 - y0);
 			lo += loStride;
 			hi += hiStride;
@@ -4381,12 +4394,12 @@ struct MouseY : public TwoInputUGen<MouseY>
 	{
 		if (_once) {
 			_once = false;
-			_y1 = *lo + gMouseUGenGlobals.mouseY * (*hi - *lo);
+			_y1 = *lo + mouseY() * (*hi - *lo);
 		}
 		Z y1 = _y1;
 		Z b1 = _b1;
 		for (int i = 0; i < n; ++i) {
-			Z y0 = *lo + gMouseUGenGlobals.mouseY * (*hi - *lo);
+			Z y0 = *lo + mouseY() * (*hi - *lo);
 			out[i] = y1 = y0 + b1 * (y1 - y0);
 			lo += loStride;
 			hi += hiStride;
@@ -4411,12 +4424,12 @@ struct ExpMouseX : public TwoInputUGen<ExpMouseX>
 	{
 		if (_once) {
 			_once = false;
-			_y1 = *lo * pow(*hi / *lo, gMouseUGenGlobals.mouseX);
+			_y1 = *lo * pow(*hi / *lo, mouseX());
 		}
 		Z y1 = _y1;
 		Z b1 = _b1;
 		for (int i = 0; i < n; ++i) {
-			Z y0 = *lo * pow(*hi / *lo, gMouseUGenGlobals.mouseX);
+			Z y0 = *lo * pow(*hi / *lo, mouseX());
 			out[i] = y1 = y0 + b1 * (y1 - y0);
 			lo += loStride;
 			hi += hiStride;
@@ -4441,12 +4454,12 @@ struct ExpMouseY : public TwoInputUGen<ExpMouseY>
 	{
 		if (_once) {
 			_once = false;
-			_y1 = *lo * pow(*hi / *lo, gMouseUGenGlobals.mouseY);
+			_y1 = *lo * pow(*hi / *lo, mouseY());
 		}
 		Z y1 = _y1;
 		Z b1 = _b1;
 		for (int i = 0; i < n; ++i) {
-			Z y0 = *lo * pow(*hi / *lo, gMouseUGenGlobals.mouseY);
+			Z y0 = *lo * pow(*hi / *lo, mouseY());
 			out[i] = y1 = y0 + b1 * (y1 - y0);
 			lo += loStride;
 			hi += hiStride;
@@ -4492,7 +4505,7 @@ static void mousex1_(Thread& th, Prim* prim)
 	Z hi   = th.popFloat("mousex1 : hi");
 	Z lo   = th.popFloat("mousex1 : lo");
 	
-	Z z = lo + gMouseUGenGlobals.mouseX * (hi - lo);
+	Z z = lo + mouseX() * (hi - lo);
 	th.push(z);
 }
 
@@ -4501,7 +4514,7 @@ static void mousey1_(Thread& th, Prim* prim)
 	Z hi   = th.popFloat("mousey1 : hi");
 	Z lo   = th.popFloat("mousey1 : lo");
 	
-	Z z = lo + gMouseUGenGlobals.mouseY * (hi - lo);
+	Z z = lo + mouseY() * (hi - lo);
 	th.push(z);
 }
 
@@ -4510,7 +4523,7 @@ static void xmousex1_(Thread& th, Prim* prim)
 	Z hi   = th.popFloat("xmousex1 : hi");
 	Z lo   = th.popFloat("xmousex1 : lo");
 	
-	Z z = lo * pow(hi / lo, gMouseUGenGlobals.mouseX);
+	Z z = lo * pow(hi / lo, mouseX());
 	th.push(z);
 }
 
@@ -4519,10 +4532,9 @@ static void xmousey1_(Thread& th, Prim* prim)
 	Z hi   = th.popFloat("xmousey1 : hi");
 	Z lo   = th.popFloat("xmousey1 : lo");
 	
-	Z z = lo * pow(hi / lo, gMouseUGenGlobals.mouseY);
+	Z z = lo * pow(hi / lo, mouseY());
 	th.push(z);
 }
-#endif // __APPLE__
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -4661,7 +4673,6 @@ void AddUGenOps()
 	DEFMCX(iwrap, 3, "(in lo hi --> out) constrain the input to the bounds by wrapping. all inputs treated as integers.")
 	DEFMCX(ifold, 3, "(in lo hi --> out) constrain the input to the bounds by folding at the edges. all inputs treated as integers.")
 
-#if defined(__APPLE__)
 	vm.addBifHelp("\n*** mouse control unit generators ***");
 	DEFMCX(mousex, 2, "(lo hi --> out) returns a signal of the X coordinate of the mouse mapped to the linear range lo to hi.");
 	DEFMCX(mousey, 2, "(lo hi --> out) returns a signal of the Y coordinate of the mouse mapped to the linear range lo to hi.");
@@ -4672,5 +4683,4 @@ void AddUGenOps()
 	DEFMCX(mousey1, 2, "(lo hi --> out) returns the current value of the Y coordinate of the mouse mapped to the linear range lo to hi.");
 	DEFMCX(xmousex1, 2, "(lo hi --> out) returns the current value of the X coordinate of the mouse mapped to the exponential range lo to hi.");
 	DEFMCX(xmousey1, 2, "(lo hi --> out) returns the current value of the Y coordinate of the mouse mapped to the exponential range lo to hi.");
-#endif
 }
